@@ -1,4 +1,4 @@
-const SHEET_URL     = 'https://script.google.com/macros/s/AKfycbw_EP7_C1S02jLHCs-yLjjMRW4k_DScHQ09p5H5FqV34wHrHsWXZtZ0a83LgkoMOP3m/exec';
+const SHEET_URL     = 'https://script.google.com/macros/s/AKfycbx7BnKbxAQVrhgwWAP6kFIOmpXiM4WBi2a3JSc9-LtD1IKiHQWV-VKpJJ0zRza4gfKi/exec';
 const SESSION_KEY   = 'baper_session_v3';
 const STATUS_KEY    = 'baper_status_v2';
 const SESSION_HOURS = 8;
