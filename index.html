@@ -5,13 +5,14 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description"
-    content="Sistem Admin BAP Online — Manajemen Berita Acara Pemeriksaan Kantor Imigrasi Kelas I TPI Tanjungpinang">
-  <meta name="theme-color" content="#0a1628">
-  <title>Admin BAP Online — Imigrasi Tanjungpinang</title>
+    content="Portal Administrasi BAP Online - Manajemen Berita Acara Pemeriksaan Seksi Intelijen dan Penindakan Keimigrasian Kantor Imigrasi Kelas I TPI Tanjungpinang">
+  <meta name="theme-color" content="#070d18">
+  <title>Admin BAP Online | INTELDAKIM Imigrasi Tanjungpinang</title>
+  
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link
-    href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500;700&display=swap"
+    href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400;1,600&display=swap"
     rel="stylesheet">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <link rel="stylesheet" href="assets/css/style.css">
@@ -19,397 +20,584 @@
 
 <body>
 
-  <!-- ═══════════════════════════════════════════
-     SPLASH SCREEN
-═══════════════════════════════════════════ -->
-  <div id="splashScreen" role="status" aria-label="Memuat sistem">
-    <img class="splash-logo" src="logo_imigrasi.png" alt="Logo Imigrasi">
-    <div class="splash-title">ADMIN BAP ONLINE</div>
-    <div class="splash-sub">Sistem Informasi BAP Online · Imigrasi Tanjungpinang</div>
-    <div class="splash-spinner"></div>
+  <!-- ============================================================
+       SPLASH SCREEN
+  ============================================================ -->
+  <div id="splashScreen" role="status" aria-label="Memuat sistem administrasi BAP">
+    <div class="splash-card">
+      <div class="splash-emblem-wrap">
+        <img class="splash-logo" src="logo_imigrasi.png" alt="Logo Pengayoman Imigrasi">
+        <div class="splash-ring" aria-hidden="true"></div>
+      </div>
+      <div class="splash-title">PORTAL ADMIN BAP ONLINE</div>
+      <div class="splash-sub">Seksi Intelijen dan Penindakan Keimigrasian (INTELDAKIM)</div>
+      <div class="splash-badge">Kantor Imigrasi Kelas I TPI Tanjungpinang</div>
+      <div class="splash-spinner-wrap">
+        <div class="splash-spinner" aria-hidden="true"></div>
+        <span class="splash-loading-text">Memuat database dan sesi kerja...</span>
+      </div>
+    </div>
   </div>
 
-  <!-- ═══════════════════════════════════════════
-     LOGIN PAGE
-═══════════════════════════════════════════ -->
+  <!-- ============================================================
+       LOGIN PAGE
+  ============================================================ -->
   <div id="loginPage" role="main">
-    <div class="login-bg-grid" aria-hidden="true"></div>
-    <div class="login-bg-glow" aria-hidden="true"></div>
-    <div id="particles" aria-hidden="true"></div>
+    <div class="login-bg-decor" aria-hidden="true">
+      <div class="login-mesh"></div>
+      <div class="login-glow-center"></div>
+      <div class="login-grid-pattern"></div>
+    </div>
 
-    <div class="login-card" role="form" aria-label="Form login sistem">
-      <div class="scan-line" aria-hidden="true"></div>
-
-      <div class="login-header">
-        <img class="imigrasi-logo" src="logo_imigrasi.png" alt="Logo Imigrasi Tanjungpinang">
-        <div class="login-brand">
-          <h1>Admin BAP Online</h1>
-          <p>Berita Acara Pemeriksaan<br>Kantor Imigrasi Kelas I TPI Tanjungpinang</p>
+    <div class="login-container">
+      <div class="login-card" role="form" aria-label="Form autentikasi petugas">
+        <div class="login-card-topbar">
+          <span class="gov-pill">SISTEM RESMI KEDINASAN</span>
+          <span class="secure-badge">256-Bit Encrypted</span>
         </div>
-      </div>
 
-      <div class="login-body">
-        <h2 class="login-title">AKSES SISTEM</h2>
-        <p class="login-subtitle">Masukkan kredensial petugas yang telah terdaftar dalam sistem BAP Online.</p>
-
-        <div class="attempt-bar-wrap">
-          <span class="attempt-label">Percobaan tersisa:</span>
-          <div class="attempt-bar" id="attemptBar" aria-label="Percobaan login tersisa">
-            <div class="attempt-dot"></div>
-            <div class="attempt-dot"></div>
-            <div class="attempt-dot"></div>
-            <div class="attempt-dot"></div>
-            <div class="attempt-dot"></div>
+        <div class="login-header">
+          <div class="imigrasi-emblem">
+            <img class="imigrasi-logo" src="logo_imigrasi.png" alt="Logo Imigrasi Tanjungpinang">
+          </div>
+          <div class="login-brand">
+            <h1>ADMIN BAP ONLINE</h1>
+            <p class="agency-title">KANTOR IMIGRASI KELAS I TPI TANJUNGPINANG</p>
+            <p class="division-title">Seksi Intelijen dan Penindakan Keimigrasian</p>
           </div>
         </div>
 
-        <div class="lfield">
-          <label for="loginUser">👤 Username</label>
-          <input type="text" id="loginUser" placeholder="admin / petugas" autocomplete="username" spellcheck="false"
-            onkeydown="if(event.key==='Enter')document.getElementById('loginPass').focus()">
-        </div>
-        <div class="lfield">
-          <label for="loginPass">🔑 Password</label>
-          <input type="password" id="loginPass" placeholder="••••••••" autocomplete="current-password"
-            onkeydown="if(event.key==='Enter')doLogin()">
-          <button class="pw-toggle" type="button" onclick="togglePw()" id="pwToggle"
-            title="Tampilkan/sembunyikan password" aria-label="Toggle password visibility">👁</button>
-        </div>
-
-        <button class="login-btn" id="loginBtn" onclick="doLogin()" aria-label="Masuk ke sistem">
-          ▶&nbsp; MASUK SISTEM
-        </button>
-        <div class="login-err" id="loginErr" role="alert" aria-live="assertive"></div>
-
-        <div class="lockout-bar" id="lockoutBar" role="status">
-          <div class="lockout-progress">
-            <div class="lockout-fill" id="lockoutFill" style="width:100%"></div>
+        <div class="login-body">
+          <div class="login-lead">
+            <h2>Autentikasi Petugas</h2>
+            <p>Masukkan kredensial resmi petugas pemeriksa untuk mengakses basis data BAP online.</p>
           </div>
-          <div class="lockout-text" id="lockoutText">Tunggu 60 detik...</div>
+
+          <div class="attempt-bar-wrap">
+            <span class="attempt-label">Percobaan akses tersisa:</span>
+            <div class="attempt-bar" id="attemptBar" aria-label="Indikator sisa percobaan login">
+              <div class="attempt-dot"></div>
+              <div class="attempt-dot"></div>
+              <div class="attempt-dot"></div>
+              <div class="attempt-dot"></div>
+              <div class="attempt-dot"></div>
+            </div>
+          </div>
+
+          <div class="lfield">
+            <label for="loginUser">Username / ID Petugas</label>
+            <div class="input-wrap">
+              <span class="input-icon" aria-hidden="true">ID</span>
+              <input type="text" id="loginUser" placeholder="admin / petugas" autocomplete="username" spellcheck="false"
+                onkeydown="if(event.key==='Enter')document.getElementById('loginPass').focus()">
+            </div>
+          </div>
+
+          <div class="lfield">
+            <label for="loginPass">Kata Sandi</label>
+            <div class="input-wrap">
+              <span class="input-icon" aria-hidden="true">PW</span>
+              <input type="password" id="loginPass" placeholder="Masukkan kata sandi..." autocomplete="current-password"
+                onkeydown="if(event.key==='Enter')doLogin()">
+              <button class="pw-toggle" type="button" onclick="togglePw()" id="pwToggle"
+                title="Tampilkan atau sembunyikan kata sandi" aria-label="Toggle password visibility">Lihat</button>
+            </div>
+          </div>
+
+          <button class="login-btn" id="loginBtn" onclick="doLogin()" aria-label="Masuk ke portal admin">
+            <span>Masuk Portal Petugas</span>
+          </button>
+
+          <div class="login-err" id="loginErr" role="alert" aria-live="assertive"></div>
+
+          <div class="lockout-bar" id="lockoutBar" role="status">
+            <div class="lockout-progress">
+              <div class="lockout-fill" id="lockoutFill" style="width:100%"></div>
+            </div>
+            <div class="lockout-text" id="lockoutText">Tunggu 60 detik...</div>
+          </div>
+        </div>
+
+        <div class="login-footer">
+          <p>Portal Khusus Petugas Seksi INTELDAKIM. Segala aktivitas pencatatan dan perubahan status diawasi sesuai SOP Keimigrasian.</p>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- ═══════════════════════════════════════════
-     ADMIN SHELL
-═══════════════════════════════════════════ -->
+  <!-- ============================================================
+       ADMIN SHELL
+  ============================================================ -->
   <div id="adminShell">
     <div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()" aria-hidden="true"></div>
 
-    <!-- ── Sidebar ── -->
+    <!-- Sidebar -->
     <aside class="sidebar" id="sidebar" role="navigation" aria-label="Menu navigasi utama">
+      <div class="sidebar-header">
+        <div class="sidebar-logo">
+          <img class="sl-logo" src="logo_imigrasi.png" alt="Logo Imigrasi">
+          <div class="sl-text">
+            <h2>BAP ONLINE</h2>
+            <div class="sl-tag">INTELDAKIM TPI</div>
+          </div>
+        </div>
+        <button class="sidebar-pin-btn" onclick="toggleSidebarCollapse()" title="Perkecil / Perluas sidebar" aria-label="Toggle collapse sidebar">
+          <span class="collapse-icon">||</span>
+        </button>
+      </div>
 
-      <div class="sidebar-logo">
-        <img class="sl-logo" src="logo_imigrasi.png" alt="Logo Imigrasi">
-        <div class="sl-text">
-          <h2>BAP Online</h2>
-          <span>Admin Dashboard · v3.0</span>
+      <div class="auto-refresh-widget">
+        <div class="ar-status-row">
+          <div class="ar-indicator">
+            <div class="ar-dot" aria-hidden="true"></div>
+            <span>Sinkronisasi Data</span>
+          </div>
+          <span class="ar-timer" id="arTimer" aria-label="Countdown refresh data">30s</span>
+        </div>
+        <div class="ar-progress-track">
+          <div class="ar-progress-bar" id="arProgressBar"></div>
         </div>
       </div>
 
-      <div class="auto-refresh-status" title="Auto-refresh data setiap 30 detik">
-        <div class="ar-dot" aria-hidden="true"></div>
-        <span style="font-size:11px;font-weight:600">Auto-Refresh</span>
-        <span class="ar-timer" id="arTimer" aria-label="Countdown refresh">30s</span>
-      </div>
+      <!-- Quick Command Bar Trigger -->
+      <button class="command-trigger-btn" onclick="openCommandPalette()" title="Buka Command Palette (Ctrl+K)">
+        <span class="ct-label">Cari cepat atau aksi...</span>
+        <kbd class="ct-kbd">Ctrl K</kbd>
+      </button>
 
       <nav class="nav" role="menubar">
-        <div class="nav-group">
-          <div class="nav-label">Menu Utama</div>
-          <div class="nav-item active" role="menuitem" data-page="dashboard" onclick="navTo('dashboard',this)"
-            tabindex="0" onkeydown="if(event.key==='Enter')navTo('dashboard',this)">
-            <span class="nav-icon" aria-hidden="true">📊</span> Dashboard
-          </div>
-          <div class="nav-item" role="menuitem" data-page="pendaftar" onclick="navTo('pendaftar',this)" tabindex="0"
-            onkeydown="if(event.key==='Enter')navTo('pendaftar',this)">
-            <span class="nav-icon" aria-hidden="true">👥</span> Data Pendaftar
-            <span class="nav-badge" id="navBadge" title="Menunggu konfirmasi">0</span>
-          </div>
-          <div class="nav-item" role="menuitem" data-page="reschedule" onclick="navTo('reschedule',this)" tabindex="0"
-            onkeydown="if(event.key==='Enter')navTo('reschedule',this)">
-            <span class="nav-icon" aria-hidden="true">🔄</span> Reschedule
-            <span class="nav-badge-orange" id="navRsBadge" style="display:none" title="Pending reschedule">0</span>
-          </div>
-          <div class="nav-item" role="menuitem" data-page="rekap" onclick="navTo('rekap',this)" tabindex="0"
-            onkeydown="if(event.key==='Enter')navTo('rekap',this)">
-            <span class="nav-icon" aria-hidden="true">📈</span> Rekap &amp; Laporan
-          </div>
-        </div>
+        <div class="nav-section-title">Navigasi Utama</div>
+        
+        <button class="nav-item active" role="menuitem" data-page="dashboard" onclick="navTo('dashboard',this)">
+          <span class="nav-icon" aria-hidden="true">D</span>
+          <span class="nav-label">Dashboard</span>
+        </button>
+
+        <button class="nav-item" role="menuitem" data-page="pendaftar" onclick="navTo('pendaftar',this)">
+          <span class="nav-icon" aria-hidden="true">P</span>
+          <span class="nav-label">Data Pendaftar</span>
+          <span class="nav-badge" id="navBadge" title="Jumlah pendaftar menunggu">0</span>
+        </button>
+
+        <button class="nav-item" role="menuitem" data-page="reschedule" onclick="navTo('reschedule',this)">
+          <span class="nav-icon" aria-hidden="true">R</span>
+          <span class="nav-label">Reschedule</span>
+          <span class="nav-badge orange" id="navRsBadge" style="display:none" title="Pengajuan reschedule pending">0</span>
+        </button>
+
+        <button class="nav-item" role="menuitem" data-page="rekap" onclick="navTo('rekap',this)">
+          <span class="nav-icon" aria-hidden="true">L</span>
+          <span class="nav-label">Rekap &amp; Laporan</span>
+        </button>
+
+        <div class="nav-section-title">Alat &amp; Audit</div>
+
+        <button class="nav-item" role="menuitem" onclick="openAuditModal()">
+          <span class="nav-icon" aria-hidden="true">A</span>
+          <span class="nav-label">Log Aktivitas</span>
+        </button>
+
+        <button class="nav-item" role="menuitem" onclick="openShortcutsModal()">
+          <span class="nav-icon" aria-hidden="true">K</span>
+          <span class="nav-label">Pintasan Keyboard</span>
+          <kbd class="nav-sub-kbd">?</kbd>
+        </button>
       </nav>
 
       <div class="sidebar-footer">
-        <div class="sf-inner">
-          <div class="sf-avatar">
-            <img src="logo_imigrasi.png" alt="Avatar petugas">
+        <div class="officer-card">
+          <div class="officer-avatar">
+            <span class="officer-initial" id="officerInitial">P</span>
+            <div class="officer-online-dot" title="Status Petugas Online"></div>
           </div>
-          <div class="sf-info">
+          <div class="officer-info">
             <h4 id="officerName">Petugas</h4>
-            <div class="sf-role">Online · Aktif</div>
-            <div class="sf-session" id="sessionExpiry" aria-label="Durasi sesi"></div>
+            <div class="officer-role">Pemeriksa Keimigrasian</div>
+            <div class="officer-session" id="sessionExpiry" aria-label="Waktu sesi aktif">Sesi Aktif</div>
           </div>
-          <button class="sf-logout" onclick="doLogout()" title="Keluar dari sistem" aria-label="Logout">⏻</button>
+          <button class="logout-btn" onclick="doLogout()" title="Keluar dari portal petugas" aria-label="Logout">
+            <span aria-hidden="true">Keluar</span>
+          </button>
         </div>
       </div>
     </aside>
 
-    <!-- ── Topbar ── -->
+    <!-- Topbar -->
     <header class="topbar" role="banner">
-      <button class="menu-toggle" onclick="toggleSidebar()" aria-label="Toggle menu navigasi" aria-expanded="false"
-        id="menuToggleBtn">☰</button>
+      <div class="topbar-left">
+        <button class="menu-toggle" onclick="toggleSidebar()" aria-label="Buka menu navigasi" aria-expanded="false"
+          id="menuToggleBtn">
+          <span class="hamburger-bar"></span>
+          <span class="hamburger-bar"></span>
+          <span class="hamburger-bar"></span>
+        </button>
 
-      <div class="topbar-title">
-        <h1 id="topbarTitle">Dashboard</h1>
-        <span id="topbarSub">Kantor Imigrasi Kelas I TPI Tanjungpinang</span>
+        <div class="topbar-title-block">
+          <div class="topbar-breadcrumb">
+            <span>Admin BAP</span>
+            <span class="bc-sep">/</span>
+            <span class="bc-current" id="topbarBreadcrumb">Dashboard</span>
+          </div>
+          <h1 id="topbarTitle">Dashboard</h1>
+        </div>
+      </div>
+
+      <div class="topbar-center">
+        <div class="quick-stats-strip" id="quickStatsStrip">
+          <div class="strip-item">
+            <span class="strip-dot green"></span>
+            <span class="strip-label">Sistem Operasional</span>
+          </div>
+          <div class="strip-sep">|</div>
+          <div class="strip-item">
+            <span class="strip-count" id="stripTodayCount">0</span>
+            <span class="strip-label">Jadwal Hari Ini</span>
+          </div>
+        </div>
       </div>
 
       <div class="topbar-right">
-        <!-- Online indicator -->
-        <div class="online-indicator online" id="onlineIndicator" title="Status koneksi">
-          <div class="oi-dot"></div>
-          <span>Online</span>
+        <!-- Online Indicator -->
+        <div class="online-status-chip online" id="onlineIndicator" title="Status koneksi server">
+          <span class="osc-dot"></span>
+          <span class="osc-text">Online</span>
         </div>
 
-        <div class="topbar-date" id="liveDate" aria-live="polite">—</div>
-        <div class="topbar-time" id="liveClock" aria-live="polite">00:00:00</div>
+        <!-- Live Clock & Date -->
+        <div class="live-clock-card">
+          <div class="clock-date" id="liveDate">Hari, Tanggal</div>
+          <div class="clock-time" id="liveClock">00:00:00 WIB</div>
+        </div>
 
-        <!-- Dark/Light mode toggle -->
-        <button class="mode-toggle" id="modeToggle" onclick="toggleTheme()" title="Ganti tema terang/gelap"
-          aria-label="Toggle tema">🌙</button>
+        <!-- Search trigger icon button -->
+        <button class="topbar-btn search-trigger" onclick="openCommandPalette()" title="Pencarian cepat (Ctrl+K)" aria-label="Cari">
+          <span class="btn-text-fallback">Cari</span>
+        </button>
 
-        <button class="refresh-btn" onclick="loadData(true)" id="refreshBtn" title="Refresh data sekarang"
-          aria-label="Refresh data">
-          <span class="ri" aria-hidden="true" style="display:inline-block">↻</span> Refresh
+        <!-- Theme Toggle -->
+        <button class="topbar-btn theme-toggle-btn" id="modeToggle" onclick="toggleTheme()" title="Ganti Tema (Gelap / Terang)" aria-label="Ganti mode tema">
+          <span class="theme-icon" id="themeIcon">Mode</span>
+        </button>
+
+        <!-- Sound Toggle -->
+        <button class="topbar-btn sound-toggle-btn" id="soundToggle" onclick="toggleSound()" title="Efek Suara Aksi Petugas (Aktif/Nonaktif)" aria-label="Toggle efek suara">
+          <span id="soundIcon">Audio</span>
+        </button>
+
+        <!-- Refresh Button -->
+        <button class="refresh-action-btn" onclick="loadData(true)" id="refreshBtn" title="Muat ulang data sekarang" aria-label="Refresh data">
+          <span class="refresh-spinner" aria-hidden="true"></span>
+          <span>Refresh</span>
         </button>
       </div>
     </header>
 
-    <!-- ── Main Content ── -->
-    <main class="main" role="main">
+    <!-- Main Content Area -->
+    <main class="main-content" role="main">
 
-      <!-- ─── DASHBOARD PAGE ─────────────────── -->
-      <section class="page-view active" id="page-dashboard" aria-label="Halaman dashboard">
-
-        <div class="page-banner">
-          <img class="page-banner-icon" src="logo_imigrasi.png" alt="Logo">
-          <div class="page-banner-text">
-            <h2>DASHBOARD BAP ONLINE</h2>
-            <p>Berita Acara Pemeriksaan · Kantor Imigrasi Kelas I Tanjungpinang</p>
+      <!-- ============================================================
+           DASHBOARD VIEW
+      ============================================================ -->
+      <section class="page-view active" id="page-dashboard" aria-label="Halaman Dashboard">
+        <!-- Hero Banner -->
+        <div class="dashboard-hero-banner">
+          <div class="dhb-content">
+            <div class="dhb-badge-row">
+              <span class="dhb-badge">INTELDAKIM TANJUNGPINANG</span>
+              <span class="dhb-badge-outline">SOP BAP PASPOR</span>
+            </div>
+            <h2>Pusat Kendali Pemeriksaan BAP Online</h2>
+            <p>Pengawasan registrasi permohonan Berita Acara Pemeriksaan paspor hilang, rusak, atau perubahan data Kantor Imigrasi Kelas I TPI Tanjungpinang.</p>
           </div>
-          <div class="page-banner-meta">
-            <div class="banner-live">Live Data</div>
-            <div class="banner-ts" id="lastUpdate">—</div>
+          <div class="dhb-meta-card">
+            <div class="dhb-meta-title">Status Sinkronisasi</div>
+            <div class="dhb-meta-time" id="lastUpdate">Sinkron: Aktif</div>
+            <div class="dhb-meta-actions">
+              <button class="dhb-quick-btn" onclick="navTo('pendaftar', document.querySelector('[data-page=pendaftar]'))">
+                Buka Data Pendaftar
+              </button>
+            </div>
           </div>
         </div>
 
         <!-- Stat Cards -->
-        <div class="stat-grid" role="region" aria-label="Statistik ringkasan">
-          <div class="stat-card s-total">
-            <div class="stat-ic" aria-hidden="true">🛂</div>
-            <div class="stat-n" id="sc-total">0</div>
-            <div class="stat-label">Total Pendaftar</div>
+        <div class="stat-overview-grid" role="region" aria-label="Ringkasan Statistik Pendaftaran">
+          <div class="stat-tile tile-total" onclick="filterFromTile('all')">
+            <div class="stat-tile-head">
+              <span class="tile-icon-badge">Total</span>
+              <span class="tile-ratio" id="tileTotalRatio">100%</span>
+            </div>
+            <div class="stat-tile-value" id="sc-total">0</div>
+            <div class="stat-tile-label">Total Permohonan Terdaftar</div>
           </div>
-          <div class="stat-card s-wait">
-            <div class="stat-ic" aria-hidden="true">⏳</div>
-            <div class="stat-n" id="sc-wait">0</div>
-            <div class="stat-label">Menunggu</div>
+
+          <div class="stat-tile tile-wait" onclick="filterFromTile('Menunggu')">
+            <div class="stat-tile-head">
+              <span class="tile-icon-badge yellow">Menunggu</span>
+              <span class="tile-ratio" id="tileWaitRatio">0%</span>
+            </div>
+            <div class="stat-tile-value" id="sc-wait">0</div>
+            <div class="stat-tile-label">Menunggu Verifikasi Petugas</div>
           </div>
-          <div class="stat-card s-conf">
-            <div class="stat-ic" aria-hidden="true">✅</div>
-            <div class="stat-n" id="sc-conf">0</div>
-            <div class="stat-label">Dikonfirmasi</div>
+
+          <div class="stat-tile tile-conf" onclick="filterFromTile('Dikonfirmasi')">
+            <div class="stat-tile-head">
+              <span class="tile-icon-badge blue">Dikonfirmasi</span>
+              <span class="tile-ratio" id="tileConfRatio">0%</span>
+            </div>
+            <div class="stat-tile-value" id="sc-conf">0</div>
+            <div class="stat-tile-label">Jadwal Kedatangan Dikonfirmasi</div>
           </div>
-          <div class="stat-card s-done">
-            <div class="stat-ic" aria-hidden="true">🎉</div>
-            <div class="stat-n" id="sc-done">0</div>
-            <div class="stat-label">Selesai</div>
+
+          <div class="stat-tile tile-done" onclick="filterFromTile('Selesai')">
+            <div class="stat-tile-head">
+              <span class="tile-icon-badge green">Selesai</span>
+              <span class="tile-ratio" id="tileDoneRatio">0%</span>
+            </div>
+            <div class="stat-tile-value" id="sc-done">0</div>
+            <div class="stat-tile-label">BAP Selesai Diperiksa</div>
           </div>
-          <div class="stat-card s-rs">
-            <div class="stat-ic" aria-hidden="true">🔄</div>
-            <div class="stat-n" id="sc-rs">0</div>
-            <div class="stat-label">Pending Reschedule</div>
+
+          <div class="stat-tile tile-rs" onclick="navTo('reschedule', document.querySelector('[data-page=reschedule]'))">
+            <div class="stat-tile-head">
+              <span class="tile-icon-badge orange">Reschedule</span>
+              <span class="tile-ratio" id="tileRsRatio">Perlu Tindakan</span>
+            </div>
+            <div class="stat-tile-value" id="sc-rs">0</div>
+            <div class="stat-tile-label">Pengajuan Jadwal Baru</div>
           </div>
         </div>
 
-        <!-- Quick filter chips for dashboard -->
-        <div id="dashQuickFilter" style="display:flex;gap:7px;margin-bottom:14px;flex-wrap:wrap;">
-          <span
-            style="font-size:9px;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:var(--text3);align-self:center;">Filter:</span>
-          <button class="month-chip active active-all" onclick="setDashFilter('all',this)">Semua</button>
-          <button class="month-chip" onclick="setDashFilter('Menunggu',this)">⏳ Menunggu</button>
-          <button class="month-chip" onclick="setDashFilter('Dikonfirmasi',this)">✅ Dikonfirmasi</button>
-          <button class="month-chip" onclick="setDashFilter('Selesai',this)">🎉 Selesai</button>
-          <button class="month-chip" onclick="setDashFilter('Pending RS',this)">🔄 Pending RS</button>
-        </div>
-
-        <!-- Recent table -->
-        <div class="table-card">
-          <div class="table-head">
-            <span class="th-icon" aria-hidden="true">🛂</span>
-            <div>
-              <div class="table-head-title">Pendaftar Terbaru</div>
-              <div class="table-head-sub" id="dashTableSub">10 data terbaru</div>
+        <!-- Split Grid: Today's Schedule Agenda & Recent Applicants -->
+        <div class="dashboard-split-grid">
+          <!-- Left Column: Today's Live Queue Agenda -->
+          <div class="card-panel today-agenda-card">
+            <div class="card-panel-header">
+              <div class="cph-title-group">
+                <h3>Agenda Pemeriksaan Hari Ini</h3>
+                <span class="cph-sub" id="todayAgendaSubtitle">Memuat antrean jadwal pemohon...</span>
+              </div>
+              <div class="cph-action-group">
+                <span class="agenda-date-badge" id="agendaTodayBadge">Hari Ini</span>
+              </div>
             </div>
-            <div class="table-actions">
-              <button class="action-btn"
-                onclick="navTo('pendaftar',document.querySelector('[data-page=pendaftar]'))">Lihat Semua →</button>
+            <div class="agenda-queue-list" id="todayQueueList">
+              <div class="agenda-empty-state">
+                <p>Memeriksa jadwal pemohon hari ini...</p>
+              </div>
             </div>
           </div>
-          <div class="tbl-wrap">
-            <table aria-label="Tabel pendaftar terbaru">
-              <thead>
-                <tr>
-                  <th scope="col">No. Reg</th>
-                  <th scope="col">Nama</th>
-                  <th scope="col">Jenis BAP</th>
-                  <th scope="col">Jadwal</th>
-                  <th scope="col">Status</th>
-                  <th scope="col">Aksi</th>
-                </tr>
-              </thead>
-              <tbody id="dashBody">
-                <tr class="loading-row">
-                  <td colspan="6" style="color:var(--sky-400)">⏳ Memuat data...</td>
-                </tr>
-              </tbody>
-            </table>
+
+          <!-- Right Column: Recent Applicants Table -->
+          <div class="card-panel recent-table-card">
+            <div class="card-panel-header">
+              <div class="cph-title-group">
+                <h3>Pendaftar BAP Terbaru</h3>
+                <span class="cph-sub" id="dashTableSub">10 data registrasi paling baru</span>
+              </div>
+              <div class="cph-action-group">
+                <div class="dash-filter-chips" id="dashQuickFilter" role="group" aria-label="Filter cepat tabel dashboard">
+                  <button class="filter-chip active" onclick="setDashFilter('all',this)">Semua</button>
+                  <button class="filter-chip" onclick="setDashFilter('Menunggu',this)">Menunggu</button>
+                  <button class="filter-chip" onclick="setDashFilter('Dikonfirmasi',this)">Dikonfirmasi</button>
+                  <button class="filter-chip" onclick="setDashFilter('Selesai',this)">Selesai</button>
+                </div>
+                <button class="panel-link-btn" onclick="navTo('pendaftar', document.querySelector('[data-page=pendaftar]'))">
+                  Buka Seluruh Data
+                </button>
+              </div>
+            </div>
+
+            <div class="table-responsive-wrapper">
+              <table class="data-table" aria-label="Tabel pendaftar BAP terbaru">
+                <thead>
+                  <tr>
+                    <th scope="col" style="width: 145px">No. Registrasi</th>
+                    <th scope="col">Nama Pemohon</th>
+                    <th scope="col">Jenis Permohonan</th>
+                    <th scope="col">Jadwal Kedatangan</th>
+                    <th scope="col">Status BAP</th>
+                    <th scope="col" style="text-align: right">Aksi Petugas</th>
+                  </tr>
+                </thead>
+                <tbody id="dashBody">
+                  <tr class="loading-state-row">
+                    <td colspan="6">
+                      <div class="table-loader-state">
+                        <span class="spinner-circle"></span>
+                        <span>Memuat data pendaftar terbaru...</span>
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       </section>
 
-      <!-- ─── PENDAFTAR PAGE ─────────────────── -->
-      <section class="page-view" id="page-pendaftar" aria-label="Halaman data pendaftar">
-        <div class="table-card">
-          <div class="table-head">
-            <span class="th-icon" aria-hidden="true">👥</span>
-            <div>
-              <div class="table-head-title">Data Seluruh Pendaftar BAP</div>
-              <div class="table-head-sub" id="tblSubtitle">Memuat...</div>
+      <!-- ============================================================
+           PENDAFTAR VIEW (FULL DATABASE)
+      ============================================================ -->
+      <section class="page-view" id="page-pendaftar" aria-label="Halaman basis data pendaftar BAP">
+        <div class="card-panel main-database-panel">
+          <div class="card-panel-header">
+            <div class="cph-title-group">
+              <h2>Data Seluruh Pendaftar BAP</h2>
+              <span class="cph-sub" id="tblSubtitle">Basis data pendaftaran terpusat INTELDAKIM</span>
             </div>
-            <div class="table-actions">
-              <div class="search-box">
-                <span class="search-icon" aria-hidden="true">🔍</span>
-                <input type="search" id="searchInput" placeholder="Cari nama / no. BAP / HP..."
-                  oninput="resetPageAndRender()" aria-label="Cari data pendaftar">
+
+            <div class="database-toolbar-group">
+              <!-- Search Box -->
+              <div class="search-input-box">
+                <span class="search-ico-label" aria-hidden="true">CARI</span>
+                <input type="search" id="searchInput" placeholder="Cari nama pemohon, no. BAP, no. HP..."
+                  oninput="resetPageAndRender()" aria-label="Cari data pemohon BAP">
+                <kbd class="search-shortcut-tag">Ctrl F</kbd>
               </div>
-              <select class="filter-select" id="filterStatus" onchange="resetPageAndRender()"
-                aria-label="Filter status">
+
+              <!-- Status Filter Select -->
+              <select class="control-select" id="filterStatus" onchange="resetPageAndRender()" aria-label="Filter status permohonan">
                 <option value="">Semua Status</option>
-                <option value="Menunggu">Menunggu</option>
-                <option value="Dikonfirmasi">Dikonfirmasi</option>
-                <option value="Selesai">Selesai</option>
-                <option value="Pending Reschedule">Pending Reschedule</option>
+                <option value="Menunggu">Status: Menunggu</option>
+                <option value="Dikonfirmasi">Status: Dikonfirmasi</option>
+                <option value="Selesai">Status: Selesai</option>
+                <option value="Pending Reschedule">Status: Pending RS</option>
               </select>
-              <select class="filter-select" id="filterJenis" onchange="resetPageAndRender()"
-                aria-label="Filter jenis BAP">
-                <option value="">Semua Jenis</option>
+
+              <!-- Permohonan Filter Select -->
+              <select class="control-select" id="filterJenis" onchange="resetPageAndRender()" aria-label="Filter jenis BAP">
+                <option value="">Semua Jenis BAP</option>
                 <option value="BAP Paspor Hilang">Paspor Hilang</option>
                 <option value="BAP Paspor Rusak">Paspor Rusak</option>
                 <option value="BAP Perubahan Data">Perubahan Data</option>
               </select>
-              <button class="export-btn" onclick="exportExcel()" aria-label="Export ke Excel">
-                📥 Export Excel
+
+              <!-- Export Excel Button -->
+              <button class="primary-btn excel-btn" onclick="exportExcel()" aria-label="Unduh data pendaftar ke berkas Excel">
+                <span>Export Excel</span>
               </button>
             </div>
           </div>
 
-          <!-- Month/Year filter -->
-          <div class="filter-row" id="filterMonthRow">
-            <span class="filter-row-label">📅 Filter Bulan:</span>
-            <div class="filter-month-group" id="monthChips"></div>
-            <div class="filter-sep" aria-hidden="true"></div>
-            <div class="year-select-wrap">
-              <span>Tahun:</span>
-              <select class="filter-select" id="filterYear" onchange="resetPageAndRender()"
-                style="padding:5px 9px;font-size:11px;" aria-label="Filter tahun"></select>
+          <!-- Date Filtering Strip -->
+          <div class="timeline-filter-strip" id="filterMonthRow">
+            <div class="tfs-left">
+              <span class="tfs-label">Filter Bulan:</span>
+              <div class="filter-month-chips-list" id="monthChips"></div>
             </div>
-            <span class="filter-active-badge" id="filterActiveBadge" style="display:none">
-              📅 <span id="filterBadgeText">—</span>
-            </span>
-            <button class="filter-clear-btn" id="filterClearBtn" onclick="clearMonthFilter()" style="display:none"
-              title="Reset filter bulan" aria-label="Reset filter bulan">
-              ✕ Reset
-            </button>
+            
+            <div class="tfs-right">
+              <div class="year-selector-wrap">
+                <label for="filterYear" class="tfs-label">Tahun:</label>
+                <select class="control-select compact" id="filterYear" onchange="resetPageAndRender()" aria-label="Filter tahun pendaftaran"></select>
+              </div>
+              <span class="active-filter-indicator" id="filterActiveBadge" style="display:none">
+                <span id="filterBadgeText">Filter Aktif</span>
+              </span>
+              <button class="reset-filter-btn" id="filterClearBtn" onclick="clearMonthFilter()" style="display:none"
+                title="Reset saringan bulan dan tahun" aria-label="Reset filter bulan dan tahun">
+                Reset Filter
+              </button>
+            </div>
           </div>
 
-          <div style="height:10px;"></div>
+          <!-- Bulk Actions Action Bar (Shown when rows are selected) -->
+          <div class="bulk-action-bar" id="bulkActionBar" style="display: none;">
+            <div class="bab-info">
+              <span class="bab-count" id="bulkSelectedCount">0</span>
+              <span>baris pemohon dipilih</span>
+            </div>
+            <div class="bab-actions">
+              <button class="bab-btn" onclick="bulkCopyPhones()">Salin Nomor HP</button>
+              <button class="bab-btn" onclick="exportExcel(true)">Export Baris Terpilih</button>
+              <button class="bab-btn-clear" onclick="clearRowSelection()">Batal Pilihan</button>
+            </div>
+          </div>
 
-          <div class="tbl-wrap">
-            <table aria-label="Tabel seluruh pendaftar BAP">
+          <!-- Main Table -->
+          <div class="table-responsive-wrapper">
+            <table class="data-table" id="mainDataTable" aria-label="Tabel seluruh data pendaftar BAP">
               <thead>
                 <tr>
-                  <th scope="col">#</th>
-                  <th scope="col">No. Reg</th>
-                  <th scope="col">Nama Lengkap</th>
-                  <th scope="col">No. HP</th>
+                  <th scope="col" style="width: 38px">
+                    <input type="checkbox" id="selectAllRows" onchange="toggleSelectAllRows(this)" title="Pilih semua data pada halaman ini">
+                  </th>
+                  <th scope="col" style="width: 44px">No</th>
+                  <th scope="col" style="width: 145px">No. Registrasi</th>
+                  <th scope="col">Nama Pemohon</th>
+                  <th scope="col">No. WhatsApp</th>
                   <th scope="col">Jenis BAP</th>
-                  <th scope="col">Jadwal</th>
-                  <th scope="col">Status</th>
+                  <th scope="col">Jadwal Kedatangan</th>
+                  <th scope="col">Status BAP</th>
                   <th scope="col">Waktu Daftar</th>
-                  <th scope="col">Aksi</th>
+                  <th scope="col" style="text-align: right">Tindakan</th>
                 </tr>
               </thead>
               <tbody id="mainBody">
-                <tr class="loading-row">
-                  <td colspan="9" style="color:var(--sky-400)">⏳ Memuat data...</td>
+                <tr class="loading-state-row">
+                  <td colspan="10">
+                    <div class="table-loader-state">
+                      <span class="spinner-circle"></span>
+                      <span>Mengambil database pendaftar dari server...</span>
+                    </div>
+                  </td>
                 </tr>
               </tbody>
             </table>
           </div>
 
-          <div class="pagination">
-            <div class="pg-info" id="pgInfo" aria-live="polite">—</div>
-            <div class="pg-btns" id="pgBtns" role="navigation" aria-label="Navigasi halaman"></div>
+          <!-- Pagination Bar -->
+          <div class="pagination-footer-bar">
+            <div class="pg-status-info" id="pgInfo" aria-live="polite">Menampilkan data...</div>
+            <div class="pg-controls-wrap" id="pgBtns" role="navigation" aria-label="Navigasi halaman data pendaftar"></div>
           </div>
         </div>
       </section>
 
-      <!-- ─── RESCHEDULE PAGE ───────────────── -->
-      <section class="page-view" id="page-reschedule" aria-label="Halaman manajemen reschedule">
-        <div class="page-banner"
-          style="border-color:rgba(249,115,22,0.22);background:linear-gradient(135deg,rgba(249,115,22,0.06) 0%,rgba(249,115,22,0.02) 100%);">
-          <img class="page-banner-icon" src="logo_imigrasi.png" alt="Logo">
-          <div class="page-banner-text">
-            <h2 style="color:var(--orange-400)">MANAJEMEN RESCHEDULE</h2>
-            <p>Tinjau dan proses pengajuan perubahan jadwal dari pemohon</p>
-          </div>
-          <div class="page-banner-meta" id="rsBannerMeta"></div>
-        </div>
-
-        <div class="rs-table-card">
-          <div class="table-head">
-            <span class="th-icon" aria-hidden="true">🔄</span>
-            <div>
-              <div class="table-head-title">Daftar Pengajuan Reschedule</div>
-              <div class="table-head-sub" id="rsSubtitle">Memuat...</div>
+      <!-- ============================================================
+           RESCHEDULE VIEW
+      ============================================================ -->
+      <section class="page-view" id="page-reschedule" aria-label="Halaman peninjauan permohonan reschedule">
+        <div class="card-panel reschedule-panel">
+          <div class="card-panel-header">
+            <div class="cph-title-group">
+              <h2>Manajemen Pengajuan Reschedule</h2>
+              <span class="cph-sub" id="rsSubtitle">Tinjau permohonan perubahan jadwal kedatangan dari pemohon</span>
             </div>
-            <div class="table-actions">
-              <div class="rs-filter-bar" role="group" aria-label="Filter status reschedule">
-                <button class="rs-filter-btn active" data-rs="all" onclick="setRsFilter('all',this)">Semua</button>
-                <button class="rs-filter-btn" data-rs="Pending" onclick="setRsFilter('Pending',this)">⏳ Pending</button>
-                <button class="rs-filter-btn" data-rs="Disetujui" onclick="setRsFilter('Disetujui',this)">✅
-                  Disetujui</button>
-                <button class="rs-filter-btn" data-rs="Ditolak" onclick="setRsFilter('Ditolak',this)">❌ Ditolak</button>
+
+            <div class="rs-action-toolbar">
+              <div class="tab-pill-group" role="group" aria-label="Filter status reschedule">
+                <button class="tab-pill-btn active" data-rs="all" onclick="setRsFilter('all',this)">Semua</button>
+                <button class="tab-pill-btn" data-rs="Pending" onclick="setRsFilter('Pending',this)">Menunggu Tindakan</button>
+                <button class="tab-pill-btn" data-rs="Disetujui" onclick="setRsFilter('Disetujui',this)">Telah Disetujui</button>
+                <button class="tab-pill-btn" data-rs="Ditolak" onclick="setRsFilter('Ditolak',this)">Ditolak</button>
               </div>
             </div>
           </div>
-          <div class="tbl-wrap">
-            <table aria-label="Tabel pengajuan reschedule">
+
+          <div class="table-responsive-wrapper">
+            <table class="data-table" aria-label="Tabel pengajuan reschedule BAP">
               <thead>
                 <tr>
-                  <th scope="col">No. Reg</th>
-                  <th scope="col">Nama</th>
+                  <th scope="col" style="width: 145px">No. Registrasi</th>
+                  <th scope="col">Nama Pemohon</th>
                   <th scope="col">NIK</th>
-                  <th scope="col">Jadwal Lama</th>
-                  <th scope="col">Jadwal Baru</th>
-                  <th scope="col">Alasan</th>
-                  <th scope="col">Status RS</th>
-                  <th scope="col">Aksi</th>
+                  <th scope="col">Jadwal Semula</th>
+                  <th scope="col">Jadwal Baru Diminta</th>
+                  <th scope="col">Alasan Pengajuan</th>
+                  <th scope="col">Status Permohonan</th>
+                  <th scope="col" style="text-align: right">Aksi Keputusan</th>
                 </tr>
               </thead>
               <tbody id="rsBody">
-                <tr class="loading-row">
-                  <td colspan="8" style="color:var(--orange-400)">⏳ Memuat data reschedule...</td>
+                <tr class="loading-state-row">
+                  <td colspan="8">
+                    <div class="table-loader-state">
+                      <span class="spinner-circle"></span>
+                      <span>Memuat data pengajuan reschedule...</span>
+                    </div>
+                  </td>
                 </tr>
               </tbody>
             </table>
@@ -417,32 +605,48 @@
         </div>
       </section>
 
-      <!-- ─── REKAP PAGE ────────────────────── -->
-      <section class="page-view" id="page-rekap" aria-label="Halaman rekap dan laporan">
-        <div class="page-banner" style="margin-bottom:20px;">
-          <img class="page-banner-icon" src="logo_imigrasi.png" alt="Logo">
-          <div class="page-banner-text">
-            <h2>REKAP &amp; LAPORAN BAP</h2>
-            <p>Statistik dan ringkasan data pendaftaran</p>
+      <!-- ============================================================
+           REKAP & LAPORAN VIEW
+      ============================================================ -->
+      <section class="page-view" id="page-rekap" aria-label="Halaman rekapitulasi data dan statistik BAP">
+        <div class="rekap-top-card">
+          <div class="rtc-content">
+            <h2>Rekapitulasi dan Statistik Pelayanan BAP</h2>
+            <p>Analisis distribusi jenis permohonan, efektivitas konfirmasi, serta kepadatan jadwal kedatangan pemohon pada Seksi INTELDAKIM.</p>
           </div>
-          <div class="page-banner-meta">
-            <button class="export-btn" onclick="exportExcel()" aria-label="Download Excel">
-              📥 Download Excel
+          <div class="rtc-actions">
+            <button class="primary-btn excel-btn" onclick="exportExcel()" aria-label="Download rekap Excel">
+              <span>Unduh Berkas Excel</span>
             </button>
           </div>
         </div>
-        <div class="recap-grid">
-          <div class="recap-card">
-            <h3>🗂️ Distribusi Status</h3>
-            <div id="statusBars"></div>
+
+        <div class="recap-analytical-grid">
+          <!-- Distribution Status Card -->
+          <div class="analytics-card">
+            <div class="analytics-card-header">
+              <h3>Distribusi Status Penyelesaian BAP</h3>
+              <span class="ach-badge">Status Keseluruhan</span>
+            </div>
+            <div class="analytics-bars-container" id="statusBars"></div>
           </div>
-          <div class="recap-card">
-            <h3>📋 Distribusi Jenis BAP</h3>
-            <div id="jenisBars"></div>
+
+          <!-- Distribution Jenis Permohonan Card -->
+          <div class="analytics-card">
+            <div class="analytics-card-header">
+              <h3>Distribusi Kategori Permohonan</h3>
+              <span class="ach-badge">Klasifikasi Masalah</span>
+            </div>
+            <div class="analytics-bars-container" id="jenisBars"></div>
           </div>
-          <div class="recap-card" style="grid-column:1/-1;">
-            <h3>🗓️ Pendaftar per Sesi</h3>
-            <div id="sesiTable"></div>
+
+          <!-- Schedule Sesi Breakdown Card -->
+          <div class="analytics-card full-width-card">
+            <div class="analytics-card-header">
+              <h3>Rekapitulasi Beban Antrean Sesi Kedatangan</h3>
+              <span class="ach-badge">Kapasitas Pelayanan Loket</span>
+            </div>
+            <div class="table-responsive-wrapper" id="sesiTable"></div>
           </div>
         </div>
       </section>
@@ -450,204 +654,426 @@
     </main>
   </div>
 
-  <!-- ═══════════════════════════════════════════
-     DETAIL MODAL
-═══════════════════════════════════════════ -->
+  <!-- ============================================================
+       DETAIL APPLICANT MODAL
+  ============================================================ -->
   <div id="modalOverlay" role="dialog" aria-modal="true" aria-labelledby="mTitle">
-    <div class="modal">
-      <div class="modal-header">
-        <img class="modal-logo" src="logo_imigrasi.png" alt="Logo Imigrasi">
-        <div style="flex:1;min-width:0;">
-          <h2 id="mTitle">Detail Pendaftar</h2>
-          <span id="mSub">—</span>
+    <div class="modal-dialog-box">
+      <!-- Modal Header -->
+      <div class="modal-header-bar">
+        <div class="mhb-emblem">
+          <img src="logo_imigrasi.png" alt="Emblem Imigrasi">
         </div>
-        <div class="modal-header-actions">
-          <button class="modal-close" id="printBtn" onclick="printDetail()" title="Cetak detail"
-            aria-label="Cetak detail pemohon">🖨️</button>
-          <button class="modal-close" onclick="closeModal()" title="Tutup" aria-label="Tutup modal">✕</button>
+        <div class="mhb-title-wrap">
+          <div class="mhb-badge-row">
+            <span class="mhb-reg-code" id="m-header-reg">BAP-00000000-0000</span>
+            <span class="mhb-status-badge" id="m-header-status">Status</span>
+          </div>
+          <h2 id="mTitle">Nama Pemohon</h2>
+        </div>
+        <div class="mhb-actions">
+          <button class="modal-tool-btn" onclick="printDetail()" title="Cetak Berkas Pemeriksaan" aria-label="Cetak berkas">
+            <span>Cetak Dokumen</span>
+          </button>
+          <button class="modal-close-btn" onclick="closeModal()" title="Tutup jendela (Esc)" aria-label="Tutup jendela">
+            <span>Tutup</span>
+          </button>
         </div>
       </div>
 
-      <div class="modal-body">
-        <div class="modal-tabs" role="tablist" aria-label="Tab detail pemohon">
-          <button class="mtab active" role="tab" data-tab="data" onclick="switchTab('data',this)"
-            aria-selected="true">📋 Data Diri</button>
-          <button class="mtab" role="tab" data-tab="dok" onclick="switchTab('dok',this)" aria-selected="false">📎
-            Dokumen</button>
-          <button class="mtab" role="tab" data-tab="status" onclick="switchTab('status',this)" aria-selected="false">🔄
-            Status</button>
-          <button class="mtab" role="tab" data-tab="rs" onclick="switchTab('rs',this)" id="rsTab" style="display:none"
-            aria-selected="false">⏳ Reschedule</button>
-        </div>
+      <!-- Modal Tabs Nav -->
+      <div class="modal-tab-nav" role="tablist" aria-label="Tab navigasi detail pemohon">
+        <button class="modal-nav-tab active" role="tab" data-tab="data" onclick="switchTab('data',this)" aria-selected="true">
+          <span>Identitas Pemohon</span>
+        </button>
+        <button class="modal-nav-tab" role="tab" data-tab="dok" onclick="switchTab('dok',this)" aria-selected="false">
+          <span>Dokumen Lampiran</span>
+          <span class="tab-count-pill" id="docCountPill">0</span>
+        </button>
+        <button class="modal-nav-tab" role="tab" data-tab="status" onclick="switchTab('status',this)" aria-selected="false">
+          <span>Keputusan &amp; Status</span>
+        </button>
+        <button class="modal-nav-tab" role="tab" data-tab="wa" onclick="switchTab('wa',this)" aria-selected="false">
+          <span>Template Pesan WhatsApp</span>
+        </button>
+        <button class="modal-nav-tab" role="tab" data-tab="rs" onclick="switchTab('rs',this)" id="rsTab" style="display:none" aria-selected="false">
+          <span>Pengajuan Reschedule</span>
+        </button>
+      </div>
 
-        <!-- Tab: Data Diri -->
-        <div class="tab-panel active" id="tab-data" role="tabpanel">
-          <div class="info-grid">
-            <div class="info-item">
-              <div class="info-key">No. Registrasi</div>
-              <div class="info-val mono" id="m-reg">—</div>
+      <!-- Modal Body -->
+      <div class="modal-scroll-body">
+
+        <!-- TAB 1: IDENTITAS PEMOHON -->
+        <div class="modal-tab-panel active" id="tab-data" role="tabpanel">
+          <div class="profile-details-grid">
+            <div class="data-group-card full-span">
+              <div class="dgc-title">Data Pokok Pemohon</div>
+              <div class="field-grid-three">
+                <div class="field-item">
+                  <span class="fi-label">Nomor Registrasi BAP</span>
+                  <span class="fi-value mono highlight" id="m-reg">Belum ada</span>
+                </div>
+                <div class="field-item">
+                  <span class="fi-label">Waktu Registrasi Masuk</span>
+                  <span class="fi-value" id="m-waktu">Belum ada</span>
+                </div>
+                <div class="field-item">
+                  <span class="fi-label">Nomor WhatsApp Pemohon</span>
+                  <div class="fi-phone-group">
+                    <span class="fi-value mono" id="m-hp">Belum ada</span>
+                    <button class="inline-wa-btn" id="m-quick-wa-btn" onclick="openDirectWAFromModal()" title="Buka percakapan WhatsApp">
+                      Kirim WA
+                    </button>
+                  </div>
+                </div>
+                <div class="field-item">
+                  <span class="fi-label">Nama Lengkap Sesuai KTP</span>
+                  <span class="fi-value strong-name" id="m-nama">Nama Pemohon</span>
+                </div>
+                <div class="field-item">
+                  <span class="fi-label">Tempat / Tanggal Lahir</span>
+                  <span class="fi-value" id="m-ttl">Belum ada</span>
+                </div>
+                <div class="field-item">
+                  <span class="fi-label">Jenis Kelamin</span>
+                  <span class="fi-value" id="m-jk">Belum ada</span>
+                </div>
+              </div>
             </div>
-            <div class="info-item">
-              <div class="info-key">Waktu Daftar</div>
-              <div class="info-val" id="m-waktu">—</div>
+
+            <div class="data-group-card full-span">
+              <div class="dgc-title">Rincian Permohonan BAP &amp; Jadwal</div>
+              <div class="field-grid-three">
+                <div class="field-item">
+                  <span class="fi-label">Kategori Permohonan</span>
+                  <span class="fi-value category-tag" id="m-jenis">Belum ada</span>
+                </div>
+                <div class="field-item">
+                  <span class="fi-label">Jenis Paspor Yang Dimohon</span>
+                  <span class="fi-value" id="m-paspor">Belum ada</span>
+                </div>
+                <div class="field-item">
+                  <span class="fi-label">Jadwal Kedatangan Petugas</span>
+                  <span class="fi-value schedule-tag" id="m-jadwal">Belum ada</span>
+                </div>
+                <div class="field-item full-span">
+                  <span class="fi-label">Tujuan Pembuatan Paspor Baru</span>
+                  <span class="fi-value text-block" id="m-tujuan">Belum ada keterangan</span>
+                </div>
+              </div>
             </div>
-            <div class="info-item full">
-              <div class="info-key">Nama Lengkap</div>
-              <div class="info-val" style="font-size:15px;font-weight:700;" id="m-nama">—</div>
-            </div>
-            <div class="info-item">
-              <div class="info-key">Tempat / Tgl Lahir</div>
-              <div class="info-val" id="m-ttl">—</div>
-            </div>
-            <div class="info-item">
-              <div class="info-key">Jenis Kelamin</div>
-              <div class="info-val" id="m-jk">—</div>
-            </div>
-            <div class="info-item">
-              <div class="info-key">No. HP / WhatsApp</div>
-              <div class="info-val mono" id="m-hp">—</div>
-            </div>
-            <div class="info-item">
-              <div class="info-key">Jadwal Kedatangan</div>
-              <div class="info-val" id="m-jadwal">—</div>
-            </div>
-            <div class="info-item">
-              <div class="info-key">Jenis Permohonan</div>
-              <div class="info-val" id="m-jenis">—</div>
-            </div>
-            <div class="info-item">
-              <div class="info-key">Jenis Paspor</div>
-              <div class="info-val" id="m-paspor">—</div>
-            </div>
-            <div class="info-item full">
-              <div class="info-key">Tujuan Pembuatan</div>
-              <div class="info-val" id="m-tujuan">—</div>
-            </div>
-            <div class="info-item full" id="m-fu-item"
-              style="display:none;border-color:rgba(34,197,94,0.3);background:rgba(34,197,94,0.05);">
-              <div class="info-key" style="color:#86efac">📸 Jadwal Foto Ulang Paspor</div>
-              <div class="info-val" id="m-fu-jadwal" style="color:#86efac;font-weight:700">—</div>
+
+            <!-- Follow-up Photo Schedule Info (If status is Selesai) -->
+            <div class="data-group-card full-span schedule-success-card" id="m-fu-item" style="display:none">
+              <div class="ss-header">
+                <span class="ss-badge">Tahap Lanjutan Pasca-BAP</span>
+                <h4>Jadwal Pengambilan Foto Ulang Paspor</h4>
+              </div>
+              <div class="ss-content">
+                <p>Pemohon telah dijadwalkan hadir ke loket foto dan sidik jari paspor pada:</p>
+                <div class="ss-date-display" id="m-fu-jadwal">Tanggal Foto Ulang</div>
+              </div>
             </div>
           </div>
         </div>
 
-        <!-- Tab: Dokumen -->
-        <div class="tab-panel" id="tab-dok" role="tabpanel">
-          <div id="docContainer"></div>
+        <!-- TAB 2: DOKUMEN LAMPIRAN -->
+        <div class="modal-tab-panel" id="tab-dok" role="tabpanel">
+          <div class="doc-studio-header">
+            <div>
+              <h3>Studio Inspeksi Dokumen</h3>
+              <p>Periksa keabsahan berkas yang diunggah pemohon. Gunakan alat putar jika foto miring atau terbalik.</p>
+            </div>
+            <div class="doc-studio-legend">
+              <span class="legend-item available">Tersedia</span>
+              <span class="legend-item missing">Tidak Dilampirkan</span>
+            </div>
+          </div>
+          <div class="doc-gallery-grid" id="docContainer"></div>
         </div>
 
-        <!-- Tab: Status -->
-        <div class="tab-panel" id="tab-status" role="tabpanel">
-          <div class="status-section" id="statusSection">
-            <h3>Ubah Status BAP Pemohon</h3>
-            <div class="status-options" id="statusOptions" role="radiogroup" aria-label="Pilih status BAP">
-              <button class="status-opt" data-val="Menunggu" onclick="selectStatus(this)" role="radio"
-                aria-checked="false">
-                <div class="so-icon" aria-hidden="true">⏳</div>
-                <div class="so-label">Menunggu</div>
+        <!-- TAB 3: STATUS & KEPUTUSAN PETUGAS -->
+        <div class="modal-tab-panel" id="tab-status" role="tabpanel">
+          <div class="status-decision-panel">
+            <div class="sdp-title-block">
+              <h3>Perbarui Status Berita Acara Pemeriksaan</h3>
+              <p>Tentukan status proses pemeriksaan pemohon. Perubahan status akan disimpan ke sistem dan lembar data operasional.</p>
+            </div>
+
+            <div class="status-selection-cards" id="statusOptions" role="radiogroup" aria-label="Pilihan status BAP">
+              <button class="status-card-opt opt-wait" data-val="Menunggu" onclick="selectStatus(this)" role="radio" aria-checked="false">
+                <div class="sco-radio"></div>
+                <div class="sco-content">
+                  <div class="sco-title">Menunggu</div>
+                  <div class="sco-desc">Berkas baru diterima dan belum selesai diverifikasi petugas pemeriksa.</div>
+                </div>
               </button>
-              <button class="status-opt" data-val="Dikonfirmasi" onclick="selectStatus(this)" role="radio"
-                aria-checked="false">
-                <div class="so-icon" aria-hidden="true">✅</div>
-                <div class="so-label">Dikonfirmasi</div>
+
+              <button class="status-card-opt opt-conf" data-val="Dikonfirmasi" onclick="selectStatus(this)" role="radio" aria-checked="false">
+                <div class="sco-radio"></div>
+                <div class="sco-content">
+                  <div class="sco-title">Dikonfirmasi</div>
+                  <div class="sco-desc">Berkas lengkap dan jadwal kedatangan disetujui untuk pemeriksaan langsung.</div>
+                </div>
               </button>
-              <button class="status-opt" data-val="Selesai" onclick="selectStatus(this)" role="radio"
-                aria-checked="false">
-                <div class="so-icon" aria-hidden="true">🎉</div>
-                <div class="so-label">Selesai</div>
+
+              <button class="status-card-opt opt-done" data-val="Selesai" onclick="selectStatus(this)" role="radio" aria-checked="false">
+                <div class="sco-radio"></div>
+                <div class="sco-content">
+                  <div class="sco-title">Selesai</div>
+                  <div class="sco-desc">Pemeriksaan BAP selesai dilaksanakan. Wajib tetapkan tanggal foto ulang paspor.</div>
+                </div>
               </button>
             </div>
-          </div>
-          <div class="status-locked-note" id="statusLockedNote" style="display:none" role="status">
-            ✅ BAP pemohon ini sudah <strong>Selesai</strong>. Status tidak dapat dikembalikan ke Menunggu /
-            Dikonfirmasi.
-          </div>
-          <div class="foto-ulang-section" id="fotoUlangSection" style="display:none">
-            <h3>📸 Jadwal Foto Ulang Paspor</h3>
-            <p class="fu-desc">Tentukan tanggal kedatangan pemohon untuk pengambilan foto ulang paspor. Jadwal ini akan
-              disertakan dalam pesan WhatsApp ke pemohon.</p>
-            <div class="fu-date-row">
-              <select class="fu-select" id="fuHari" aria-label="Pilih hari">
-                <option value="">Hari</option>
-              </select>
-              <select class="fu-select" id="fuBulan" aria-label="Pilih bulan">
-                <option value="">Bulan</option>
-              </select>
-              <select class="fu-select" id="fuTahun" aria-label="Pilih tahun">
-                <option value="">Tahun</option>
-              </select>
+
+            <div class="status-completed-notice" id="statusLockedNote" style="display:none" role="status">
+              Status permohonan ini telah ditetapkan <strong>Selesai</strong>. Berita Acara Pemeriksaan telah sah dan terkunci.
             </div>
-          </div>
-          <div>
-            <h3 style="font-size:11.5px;font-weight:700;color:var(--text2);margin-bottom:8px;">📝 Catatan Petugas <span
-                style="font-weight:400;opacity:0.6">(opsional)</span></h3>
-            <textarea class="note-area" id="m-note" placeholder="Tambahkan catatan internal..." rows="3"
-              aria-label="Catatan petugas"></textarea>
+
+            <!-- Follow-up Photo Date Picker (Required if Selesai) -->
+            <div class="foto-ulang-card" id="fotoUlangSection" style="display:none">
+              <div class="fuc-header">
+                <h4>Penetapan Jadwal Foto Ulang Paspor</h4>
+                <p>Pilih tanggal kedatangan pemohon untuk sesi foto dan rekam biometrik paspor baru.</p>
+              </div>
+              <div class="fuc-form-row">
+                <div class="date-select-cell">
+                  <label for="fuHari">Hari</label>
+                  <select class="control-select" id="fuHari" aria-label="Pilih hari foto ulang">
+                    <option value="">Hari</option>
+                  </select>
+                </div>
+                <div class="date-select-cell">
+                  <label for="fuBulan">Bulan</label>
+                  <select class="control-select" id="fuBulan" aria-label="Pilih bulan foto ulang">
+                    <option value="">Bulan</option>
+                  </select>
+                </div>
+                <div class="date-select-cell">
+                  <label for="fuTahun">Tahun</label>
+                  <select class="control-select" id="fuTahun" aria-label="Pilih tahun foto ulang">
+                    <option value="">Tahun</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <!-- Officer Notes -->
+            <div class="officer-notes-box">
+              <label for="m-note" class="on-label">
+                <span>Catatan Khusus Petugas Pemeriksa</span>
+                <span class="on-optional">(Opsional / Catatan Internal Loket)</span>
+              </label>
+              <textarea class="on-textarea" id="m-note" placeholder="Tuliskan keterangan berkas, catatan tambahan pemeriksaan, atau instruksi khusus untuk pemohon..." rows="3" aria-label="Catatan petugas"></textarea>
+            </div>
           </div>
         </div>
 
-        <!-- Tab: Reschedule -->
-        <div class="tab-panel" id="tab-rs" role="tabpanel">
+        <!-- TAB 4: WHATSAPP TEMPLATE GENERATOR -->
+        <div class="modal-tab-panel" id="tab-wa" role="tabpanel">
+          <div class="wa-generator-layout">
+            <div class="wa-template-selector">
+              <h4>Pilih Jenis Pesan Resmi:</h4>
+              <div class="wa-preset-buttons">
+                <button class="wa-preset-btn active" onclick="applyWATemplate('konfirmasi', this)">
+                  Konfirmasi Jadwal Kedatangan
+                </button>
+                <button class="wa-preset-btn" onclick="applyWATemplate('h1', this)">
+                  Pengingat Kehadiran (H-1)
+                </button>
+                <button class="wa-preset-btn" onclick="applyWATemplate('berkas_kurang', this)">
+                  Pemberitahuan Berkas Belum Lengkap
+                </button>
+                <button class="wa-preset-btn" onclick="applyWATemplate('selesai', this)">
+                  BAP Selesai &amp; Jadwal Foto Ulang
+                </button>
+              </div>
+            </div>
+
+            <div class="wa-preview-box">
+              <div class="wpb-header">
+                <span class="wpb-label">Pratinjau Pesan WhatsApp</span>
+                <span class="wpb-target" id="waRecipientNumber">Tujuan: -</span>
+              </div>
+              <textarea class="wa-text-editor" id="waMessageEditor" rows="10" placeholder="Pilih template di atas atau ketik pesan langsung..."></textarea>
+              <div class="wpb-footer">
+                <button class="wa-tool-btn" onclick="copyWAMessage()">Salin Teks Pesan</button>
+                <button class="wa-primary-send-btn" onclick="sendDirectWAMessage()">
+                  <span>Buka di WhatsApp Web / App</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 5: RESCHEDULE DETAIL -->
+        <div class="modal-tab-panel" id="tab-rs" role="tabpanel">
           <div id="rsDetailPanel"></div>
         </div>
+
       </div>
 
-      <div class="modal-footer">
-        <button class="mf-btn mf-del" onclick="confirmDelete()" aria-label="Hapus data pemohon">🗑️ Hapus</button>
-        <button class="mf-btn mf-print" onclick="printDetail()" aria-label="Cetak detail">🖨️ Cetak</button>
-        <button class="mf-btn mf-cancel" onclick="closeModal()" aria-label="Tutup modal">Tutup</button>
-        <button class="mf-btn mf-save" onclick="saveStatus()" aria-label="Simpan perubahan status">💾 Simpan
-          Status</button>
+      <!-- Modal Footer Action Bar -->
+      <div class="modal-footer-bar">
+        <div class="mfb-left">
+          <button class="danger-btn-ghost" onclick="confirmDelete()" aria-label="Hapus data pemohon dari sistem">
+            Hapus Registrasi
+          </button>
+        </div>
+        <div class="mfb-right">
+          <button class="neutral-btn" onclick="closeModal()" aria-label="Tutup modal">Tutup</button>
+          <button class="primary-save-btn" onclick="saveStatus()" aria-label="Simpan perubahan status">
+            Simpan Keputusan Status
+          </button>
+        </div>
       </div>
     </div>
   </div>
 
-  <!-- ═══════════════════════════════════════════
-     DELETE CONFIRM MODAL
-═══════════════════════════════════════════ -->
+  <!-- ============================================================
+       COMMAND PALETTE (Ctrl+K)
+  ============================================================ -->
+  <div id="commandPaletteModal" role="dialog" aria-modal="true" aria-label="Command Palette">
+    <div class="cp-backdrop" onclick="closeCommandPalette()"></div>
+    <div class="cp-dialog">
+      <div class="cp-input-wrap">
+        <span class="cp-search-icon">CARI</span>
+        <input type="text" id="cpInput" placeholder="Cari nama pemohon, no registrasi, halaman, atau aksi sistem..."
+          autocomplete="off" spellcheck="false" oninput="handleCPSearch()" onkeydown="handleCPKeydown(event)">
+        <kbd class="cp-esc-tag" onclick="closeCommandPalette()">ESC</kbd>
+      </div>
+
+      <div class="cp-results-container" id="cpResults">
+        <!-- Injected dynamically by main.js -->
+      </div>
+
+      <div class="cp-footer-bar">
+        <span>Gunakan tombol panah <strong>Up / Down</strong> untuk navigasi, <strong>Enter</strong> untuk memilih, <strong>ESC</strong> untuk menutup</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       OFFICER AUDIT TRAIL LOG MODAL
+  ============================================================ -->
+  <div id="auditLogModal" role="dialog" aria-modal="true" aria-labelledby="auditTitle">
+    <div class="audit-dialog-box">
+      <div class="audit-header">
+        <div>
+          <h3 id="auditTitle">Log Aktivitas &amp; Jejak Audit Petugas</h3>
+          <p>Catatan riwayat tindakan perubahan status, verifikasi berkas, dan penghapusan data pada sesi ini.</p>
+        </div>
+        <button class="modal-close-btn" onclick="closeAuditModal()" aria-label="Tutup log aktivitas">Tutup</button>
+      </div>
+      <div class="audit-body" id="auditLogList">
+        <div class="audit-empty">Belum ada catatan aktivitas pada sesi ini.</div>
+      </div>
+      <div class="audit-footer">
+        <button class="neutral-btn compact" onclick="clearAuditLog()">Bersihkan Riwayat Sesi</button>
+        <button class="primary-btn compact" onclick="closeAuditModal()">Selesai</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       KEYBOARD SHORTCUTS HELPER MODAL
+  ============================================================ -->
+  <div id="shortcutsModal" role="dialog" aria-modal="true" aria-labelledby="shortcutTitle">
+    <div class="shortcuts-dialog-box">
+      <div class="shortcuts-header">
+        <h3 id="shortcutTitle">Pintasan Keyboard Petugas</h3>
+        <button class="modal-close-btn" onclick="closeShortcutsModal()" aria-label="Tutup bantuan pintasan">Tutup</button>
+      </div>
+      <div class="shortcuts-grid">
+        <div class="shortcut-row">
+          <kbd>Ctrl + K</kbd>
+          <span>Buka Command Palette &amp; Pencarian Cepat</span>
+        </div>
+        <div class="shortcut-row">
+          <kbd>Ctrl + F</kbd>
+          <span>Fokus pada kotak pencarian data pendaftar</span>
+        </div>
+        <div class="shortcut-row">
+          <kbd>R</kbd>
+          <span>Muat ulang / sinkronisasi data dari Google Sheets</span>
+        </div>
+        <div class="shortcut-row">
+          <kbd>1 - 4</kbd>
+          <span>Pindah halaman (Dashboard, Pendaftar, Reschedule, Rekap)</span>
+        </div>
+        <div class="shortcut-row">
+          <kbd>?</kbd>
+          <span>Buka panduan pintasan keyboard ini</span>
+        </div>
+        <div class="shortcut-row">
+          <kbd>Esc</kbd>
+          <span>Tutup jendela modal, lightbox, atau konfirmasi aktif</span>
+        </div>
+      </div>
+      <div class="shortcuts-footer">
+        <button class="primary-btn compact" onclick="closeShortcutsModal()">Mengerti</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       DELETE CONFIRMATION MODAL
+  ============================================================ -->
   <div id="deleteOverlay" role="dialog" aria-modal="true" aria-labelledby="deleteModalTitle">
-    <div class="delete-modal">
-      <div class="delete-icon" aria-hidden="true">🗑️</div>
-      <h3 id="deleteModalTitle">Hapus Data?</h3>
-      <p>Data yang akan dihapus:</p>
-      <p class="delete-name" id="deleteName">—</p>
-      <div class="delete-warning" role="alert">
-        ⚠️ Data yang dihapus <strong>tidak dapat dikembalikan</strong>.
+    <div class="delete-modal-card">
+      <div class="delete-icon-wrap">HAPUS</div>
+      <h3 id="deleteModalTitle">Hapus Data Registrasi Pemohon?</h3>
+      <p class="delete-subtext">Data yang akan dihapus dari sistem:</p>
+      <div class="delete-target-name" id="deleteName">Nama Pemohon</div>
+      <div class="delete-warning-box" role="alert">
+        Perhatian: Data yang dihapus akan terhapus dari basis data lokal dan Google Sheets. Tindakan ini tidak dapat dibatalkan.
       </div>
-      <div class="delete-btns">
-        <button class="del-cancel" onclick="closeDeleteModal()" aria-label="Batal hapus">← Batal</button>
-        <button class="del-confirm" onclick="executeDelete()" aria-label="Konfirmasi hapus">🗑️ Hapus!</button>
+      <div class="delete-actions-group">
+        <button class="neutral-btn" onclick="closeDeleteModal()" aria-label="Batal menghapus">Batal</button>
+        <button class="danger-confirm-btn" onclick="executeDelete()" aria-label="Konfirmasi hapus data">Ya, Hapus Data</button>
       </div>
     </div>
   </div>
 
-  <!-- ═══════════════════════════════════════════
-     CUSTOM CONFIRM DIALOG
-═══════════════════════════════════════════ -->
+  <!-- ============================================================
+       CUSTOM SYSTEM CONFIRM DIALOG
+  ============================================================ -->
   <div id="confirmOverlay" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
-    <div class="confirm-modal">
-      <div class="confirm-icon" id="confirmIcon" aria-hidden="true">❓</div>
-      <h3 id="confirmTitle">Konfirmasi</h3>
-      <p id="confirmMsg">Apakah Anda yakin?</p>
-      <div class="confirm-btns">
-        <button class="confirm-cancel-btn" id="confirmCancelBtn" onclick="resolveConfirm(false)">Batal</button>
-        <button class="confirm-ok-btn info" id="confirmOkBtn" onclick="resolveConfirm(true)">Ya, Lanjutkan</button>
+    <div class="confirm-dialog-card">
+      <div class="confirm-icon-wrap" id="confirmIcon">PERIKSA</div>
+      <h3 id="confirmTitle">Konfirmasi Tindakan</h3>
+      <p id="confirmMsg">Apakah Anda yakin ingin melanjutkan tindakan ini?</p>
+      <div class="confirm-actions-row">
+        <button class="neutral-btn" id="confirmCancelBtn" onclick="resolveConfirm(false)">Batal</button>
+        <button class="primary-btn" id="confirmOkBtn" onclick="resolveConfirm(true)">Ya, Lanjutkan</button>
       </div>
     </div>
   </div>
 
-  <!-- ═══════════════════════════════════════════
-     LIGHTBOX
-═══════════════════════════════════════════ -->
-  <div id="lightbox" role="dialog" aria-modal="true" aria-label="Preview dokumen"
+  <!-- ============================================================
+       DOCUMENT LIGHTBOX & INSPECTOR
+  ============================================================ -->
+  <div id="lightbox" role="dialog" aria-modal="true" aria-label="Pratinjau Dokumen Lampiran"
     onclick="if(event.target===this)closeLightbox()">
-    <button id="lightbox-close" onclick="closeLightbox()" aria-label="Tutup preview">✕</button>
-    <img id="lightbox-img" src="" alt="Preview dokumen">
+    <div class="lightbox-toolbar">
+      <span class="lightbox-title" id="lightboxTitle">Dokumen Lampiran</span>
+      <div class="lightbox-tools">
+        <button class="lb-tool-btn" onclick="rotateLightboxDoc(-90)" title="Putar 90 derajat ke kiri">Putar Kiri</button>
+        <button class="lb-tool-btn" onclick="rotateLightboxDoc(90)" title="Putar 90 derajat ke kanan">Putar Kanan</button>
+        <button class="lb-tool-btn" onclick="resetLightboxZoom()" title="Reset tampilan">Reset</button>
+        <a class="lb-tool-btn link" id="lightboxDownloadBtn" href="#" target="_blank" rel="noopener">Buka Berkas Asli</a>
+        <button class="lb-close-btn" onclick="closeLightbox()" title="Tutup pratinjau (Esc)" aria-label="Tutup">Tutup</button>
+      </div>
+    </div>
+    <div class="lightbox-stage">
+      <img id="lightbox-img" src="" alt="Pratinjau Dokumen Lampiran BAP">
+    </div>
   </div>
 
-  <!-- ═══════════════════════════════════════════
-     TOAST NOTIFICATION
-═══════════════════════════════════════════ -->
+  <!-- ============================================================
+       TOAST NOTIFICATION CONTAINER
+  ============================================================ -->
   <div id="toast" role="status" aria-live="polite"></div>
 
   <script src="assets/js/main.js"></script>
