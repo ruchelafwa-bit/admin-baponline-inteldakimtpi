@@ -1,15 +1,19 @@
 /* ================================================================
-   ADMIN BAP ONLINE — main.js v3.0
+   ADMIN BAP ONLINE - INTELDAKIM TANJUNGPINANG
+   Enterprise Admin Application - main.js v4.0
    Kantor Imigrasi Kelas I TPI Tanjungpinang
    ================================================================ */
 
 'use strict';
 
-// ── Constants ────────────────────────────────────────────────────
+// ── Constants & Configuration ────────────────────────────────────
 const SHEET_URL = 'https://script.google.com/macros/s/AKfycbwG-V9Jvm5GlsjLYnCGrciLx8tAp2NfpKUsnoAmNnILHxO-3tJbf_D90pzrjMMx8Ogg/exec';
-const SESSION_KEY = 'baper_session_v3';
-const STATUS_KEY = 'baper_status_v2';
-const THEME_KEY = 'baper_theme_v1';
+const SESSION_KEY = 'baper_session_v4';
+const STATUS_KEY = 'baper_status_v4';
+const THEME_KEY = 'baper_theme_v4';
+const AUDIT_KEY = 'baper_audit_v4';
+const SOUND_KEY = 'baper_sound_v4';
+
 const SESSION_HOURS = 8;
 const MAX_ATTEMPTS = 5;
 const LOCKOUT_SECS = 60;
@@ -20,75 +24,206 @@ const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Se
 const MONTH_FULL = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
 const DAYS_ID = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
 
-// ── State ────────────────────────────────────────────────────────
+// ── Application State ────────────────────────────────────────────
 let allData = [];
 let localStatus = {};
+let auditLogs = [];
+let selectedRowKeys = new Set();
+let docRotations = {};
+
 let currentPage = 1;
 let currentRow = null;
 let pendingDelKey = null;
+
 let rsFilter = 'all';
 let dashFilter = 'all';
 let activeMonth = 'all';
 let activeYear = '';
+
 let arCountdown = REFRESH_SECS;
 let tokenAttempts = MAX_ATTEMPTS;
 let lockoutTimer = null;
 let autoRefInt = null;
 let confirmResolve = null;
 
-// ── Helpers ──────────────────────────────────────────────────────
+let isSoundEnabled = true;
+let cpSelectedIndex = 0;
+let cpCurrentResults = [];
+let currentLightboxRotation = 0;
+
+// ── Core Helpers ─────────────────────────────────────────────────
 const $ = id => document.getElementById(id);
 const $$ = sel => document.querySelectorAll(sel);
 
-function escKey(k) { return (k || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'"); }
+function escKey(k) { 
+  return (k || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'"); 
+}
+
 function escHtml(s) {
   return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-// ── Theme ────────────────────────────────────────────────────────
+// ── Audio Feedback (Procedural Web Audio API) ────────────────────
+function playTone(freq = 587.33, type = 'sine', duration = 0.12) {
+  if (!isSoundEnabled) return;
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, ctx.currentTime);
+    gain.gain.setValueAtTime(0.04, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + duration);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + duration);
+  } catch {
+    // Ignore audio context autoplay restrictions
+  }
+}
+
+function playSuccessChime() {
+  playTone(523.25, 'sine', 0.08);
+  setTimeout(() => playTone(659.25, 'sine', 0.12), 70);
+}
+
+function playAlertChime() {
+  playTone(392.00, 'triangle', 0.1);
+  setTimeout(() => playTone(329.63, 'triangle', 0.14), 80);
+}
+
+function initSound() {
+  const saved = localStorage.getItem(SOUND_KEY);
+  isSoundEnabled = saved !== 'false';
+  updateSoundIcon();
+}
+
+function toggleSound() {
+  isSoundEnabled = !isSoundEnabled;
+  localStorage.setItem(SOUND_KEY, String(isSoundEnabled));
+  updateSoundIcon();
+  if (isSoundEnabled) playSuccessChime();
+  showToast('info', isSoundEnabled ? 'Efek audio diaktifkan' : 'Efek audio dimatikan');
+}
+
+function updateSoundIcon() {
+  const el = $('soundIcon');
+  if (el) el.textContent = isSoundEnabled ? 'Audio: On' : 'Audio: Off';
+}
+
+// ── Audit Log System ─────────────────────────────────────────────
+function loadAuditLogs() {
+  try {
+    auditLogs = JSON.parse(localStorage.getItem(AUDIT_KEY) || '[]');
+  } catch {
+    auditLogs = [];
+  }
+}
+
+function logActivity(action, details) {
+  const session = getSession();
+  const officer = session ? session.displayName : 'Petugas';
+  const entry = {
+    id: Date.now(),
+    officer,
+    action,
+    details,
+    time: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+    date: new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })
+  };
+  auditLogs.unshift(entry);
+  if (auditLogs.length > 80) auditLogs.pop();
+  try {
+    localStorage.setItem(AUDIT_KEY, JSON.stringify(auditLogs));
+  } catch {
+    // Storage quota fallback
+  }
+}
+
+function openAuditModal() {
+  renderAuditLogs();
+  $('auditLogModal').classList.add('show');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeAuditModal() {
+  $('auditLogModal').classList.remove('show');
+  document.body.style.overflow = '';
+}
+
+function clearAuditLog() {
+  auditLogs = [];
+  localStorage.removeItem(AUDIT_KEY);
+  renderAuditLogs();
+  showToast('info', 'Riwayat aktivitas telah dibersihkan');
+}
+
+function renderAuditLogs() {
+  const container = $('auditLogList');
+  if (!container) return;
+  if (!auditLogs.length) {
+    container.innerHTML = '<div class="audit-empty">Belum ada catatan aktivitas pada sesi ini.</div>';
+    return;
+  }
+  container.innerHTML = auditLogs.map(item => `
+    <div class="audit-item">
+      <div class="audit-item-top">
+        <span class="audit-action-name">${escHtml(item.action)}</span>
+        <span class="audit-time">${escHtml(item.date)} ${escHtml(item.time)}</span>
+      </div>
+      <div class="audit-desc">${escHtml(item.details)} <span style="opacity:0.65;font-size:10px;">(${escHtml(item.officer)})</span></div>
+    </div>
+  `).join('');
+}
+
+// ── Theme Protocol (Dual Mode) ───────────────────────────────────
 function initTheme() {
   const saved = localStorage.getItem(THEME_KEY);
   if (saved === 'light') applyTheme('light');
   else applyTheme('dark');
 }
+
 function applyTheme(mode) {
-  const btn = $('modeToggle');
+  const icon = $('themeIcon');
   if (mode === 'light') {
     document.body.classList.add('light-mode');
-    if (btn) btn.textContent = '☀️';
+    if (icon) icon.textContent = 'Mode: Terang';
     localStorage.setItem(THEME_KEY, 'light');
   } else {
     document.body.classList.remove('light-mode');
-    if (btn) btn.textContent = '🌙';
+    if (icon) icon.textContent = 'Mode: Gelap';
     localStorage.setItem(THEME_KEY, 'dark');
   }
 }
+
 function toggleTheme() {
   const isLight = document.body.classList.contains('light-mode');
   applyTheme(isLight ? 'dark' : 'light');
+  logActivity('Pengaturan Tema', `Mengubah tema menjadi ${isLight ? 'Gelap' : 'Terang'}`);
 }
 
-// ── Online/Offline ───────────────────────────────────────────────
+// ── Online / Connectivity Status ─────────────────────────────────
 function initOnlineStatus() {
   function update() {
     const el = $('onlineIndicator');
     if (!el) return;
     if (navigator.onLine) {
-      el.className = 'online-indicator online';
-      el.innerHTML = '<div class="oi-dot"></div><span>Online</span>';
+      el.className = 'online-status-chip online';
+      el.innerHTML = '<span class="osc-dot"></span><span class="osc-text">Online</span>';
     } else {
-      el.className = 'online-indicator offline';
-      el.innerHTML = '<div class="oi-dot"></div><span>Offline</span>';
+      el.className = 'online-status-chip offline';
+      el.innerHTML = '<span class="osc-dot"></span><span class="osc-text">Offline</span>';
     }
   }
-  window.addEventListener('online', update);
-  window.addEventListener('offline', update);
+  window.addEventListener('online', () => { update(); showToast('success', 'Koneksi kembali online'); });
+  window.addEventListener('offline', () => { update(); showToast('error', 'Koneksi terputus (Offline)'); });
   update();
 }
 
-// ── Custom Confirm ───────────────────────────────────────────────
-function showConfirm({ title = 'Konfirmasi', msg = 'Apakah Anda yakin?', icon = '❓',
-  okText = 'Ya, Lanjutkan', cancelText = 'Batal', type = 'info' }) {
+// ── Custom System Confirm Dialog ─────────────────────────────────
+function showConfirm({ title = 'Konfirmasi', msg = 'Apakah Anda yakin?', icon = 'PERIKSA',
+  okText = 'Ya, Lanjutkan', cancelText = 'Batal' }) {
   return new Promise(resolve => {
     confirmResolve = resolve;
     $('confirmIcon').textContent = icon;
@@ -96,61 +231,61 @@ function showConfirm({ title = 'Konfirmasi', msg = 'Apakah Anda yakin?', icon = 
     $('confirmMsg').textContent = msg;
     $('confirmOkBtn').textContent = okText;
     $('confirmCancelBtn').textContent = cancelText;
-    $('confirmOkBtn').className = `confirm-ok-btn ${type}`;
     $('confirmOverlay').classList.add('show');
     document.body.style.overflow = 'hidden';
   });
 }
+
 function resolveConfirm(val) {
   $('confirmOverlay').classList.remove('show');
   document.body.style.overflow = '';
-  if (confirmResolve) { confirmResolve(val); confirmResolve = null; }
+  if (confirmResolve) {
+    confirmResolve(val);
+    confirmResolve = null;
+  }
 }
 
-// ── Session ──────────────────────────────────────────────────────
+// ── Session Management ───────────────────────────────────────────
 function saveSession(displayName, username) {
   localStorage.setItem(SESSION_KEY, JSON.stringify({ displayName, username, loginTime: Date.now() }));
 }
+
 function getSession() {
   try {
     const raw = localStorage.getItem(SESSION_KEY);
     if (!raw) return null;
     const s = JSON.parse(raw);
-    if (Date.now() - s.loginTime > SESSION_HOURS * 3600000) { clearSession(); return null; }
+    if (Date.now() - s.loginTime > SESSION_HOURS * 3600000) {
+      clearSession();
+      return null;
+    }
     return s;
-  } catch { return null; }
-}
-function clearSession() { localStorage.removeItem(SESSION_KEY); }
-function getSessionAge(s) {
-  if (!s) return '';
-  const m = Math.floor((Date.now() - s.loginTime) / 60000);
-  return m < 60 ? `Login ${m} mnt lalu` : `Login ${Math.floor(m / 60)} jam lalu`;
-}
-
-// ── Particle FX ─────────────────────────────────────────────────
-function spawnParticles() {
-  const c = $('particles');
-  if (!c) return;
-  for (let i = 0; i < 14; i++) {
-    setTimeout(() => {
-      const p = document.createElement('div');
-      p.className = 'particle';
-      const sz = Math.random() * 4 + 2;
-      const x = Math.random() * 100;
-      const dur = Math.random() * 14 + 10;
-      const dx = (Math.random() - 0.5) * 80;
-      p.style.cssText = `width:${sz}px;height:${sz}px;left:${x}%;bottom:-10px;opacity:${Math.random() * .45 + .15};--dx:${dx}px;animation-duration:${dur}s;animation-delay:${Math.random() * 6}s;`;
-      c.appendChild(p);
-    }, i * 160);
+  } catch {
+    return null;
   }
 }
 
-// ── Login ────────────────────────────────────────────────────────
+function clearSession() {
+  localStorage.removeItem(SESSION_KEY);
+}
+
+function getSessionAge(s) {
+  if (!s) return 'Sesi Aktif';
+  const m = Math.floor((Date.now() - s.loginTime) / 60000);
+  return m < 60 ? `Aktif ${m} mnt` : `Aktif ${Math.floor(m / 60)} jam`;
+}
+
+// ── Authentication (Login & Logout) ──────────────────────────────
 function togglePw() {
   const inp = $('loginPass');
   const btn = $('pwToggle');
-  if (inp.type === 'password') { inp.type = 'text'; btn.textContent = '🙈'; }
-  else { inp.type = 'password'; btn.textContent = '👁'; }
+  if (inp.type === 'password') {
+    inp.type = 'text';
+    btn.textContent = 'Sembunyikan';
+  } else {
+    inp.type = 'password';
+    btn.textContent = 'Lihat';
+  }
 }
 
 async function doLogin() {
@@ -159,11 +294,15 @@ async function doLogin() {
   const err = $('loginErr');
   const btn = $('loginBtn');
 
-  if (!u || !p) { showLoginErr('Username dan password tidak boleh kosong.'); return; }
+  if (!u || !p) {
+    showLoginErr('Username dan kata sandi tidak boleh kosong.');
+    playAlertChime();
+    return;
+  }
   if (tokenAttempts <= 0) return;
 
   btn.disabled = true;
-  btn.textContent = '⏳ Memverifikasi...';
+  btn.innerHTML = '<span>Memverifikasi Kredensial...</span>';
   err.classList.remove('show');
 
   try {
@@ -175,27 +314,35 @@ async function doLogin() {
     const json = await res.json();
 
     if (json.ok) {
-      saveSession(json.displayName || u, u);
-      bootDashboard(json.displayName || u);
+      const displayName = json.displayName || u;
+      saveSession(displayName, u);
+      logActivity('Autentikasi Berhasil', `Petugas ${displayName} berhasil login ke portal.`);
+      playSuccessChime();
+      bootDashboard(displayName);
     } else {
       tokenAttempts = Math.max(0, tokenAttempts - 1);
       updateAttemptDots();
-      showLoginErr(json.error || 'Username atau password salah.');
-      if (tokenAttempts <= 0) { startLockout(); return; }
+      playAlertChime();
+      showLoginErr(json.error || 'Username atau kata sandi tidak cocok.');
+      if (tokenAttempts <= 0) {
+        startLockout();
+        return;
+      }
     }
   } catch {
-    showLoginErr('⚠ Gagal terhubung ke server. Periksa koneksi internet.');
+    playAlertChime();
+    showLoginErr('Gagal terhubung ke server. Periksa jaringan internet.');
   }
 
   btn.disabled = false;
-  btn.textContent = '▶ MASUK SISTEM';
+  btn.innerHTML = '<span>Masuk Portal Petugas</span>';
 }
 
 function showLoginErr(msg) {
   const err = $('loginErr');
   err.textContent = msg;
   err.classList.remove('show');
-  void err.offsetWidth; // reflow for animation restart
+  void err.offsetWidth;
   err.classList.add('show');
 }
 
@@ -214,25 +361,25 @@ function startLockout() {
   const pI = $('loginPass');
 
   btn.disabled = true;
-  btn.textContent = '🔒 Terkunci';
+  btn.innerHTML = '<span>Akses Terkunci Sementara</span>';
   uI.disabled = true;
   pI.disabled = true;
   bar.classList.add('show');
   fill.style.width = '100%';
 
   let remaining = LOCKOUT_SECS;
-  txt.textContent = `Terkunci. Tunggu ${remaining} detik...`;
+  txt.textContent = `Akses terkunci. Silakan tunggu ${remaining} detik...`;
 
   lockoutTimer = setInterval(() => {
     remaining--;
     fill.style.width = (remaining / LOCKOUT_SECS * 100) + '%';
-    txt.textContent = `Terkunci. Tunggu ${remaining} detik...`;
+    txt.textContent = `Akses terkunci. Silakan tunggu ${remaining} detik...`;
 
     if (remaining <= 0) {
       clearInterval(lockoutTimer);
       tokenAttempts = MAX_ATTEMPTS;
       btn.disabled = false;
-      btn.textContent = '▶ MASUK SISTEM';
+      btn.innerHTML = '<span>Masuk Portal Petugas</span>';
       uI.disabled = false;
       pI.disabled = false;
       bar.classList.remove('show');
@@ -244,14 +391,14 @@ function startLockout() {
 
 async function doLogout() {
   const ok = await showConfirm({
-    title: 'Keluar Sistem',
-    msg: 'Apakah Anda yakin ingin keluar dari sistem?',
-    icon: '⏻',
-    okText: 'Ya, Keluar',
-    type: 'danger'
+    title: 'Keluar Portal Petugas',
+    msg: 'Apakah Anda yakin ingin mengakhiri sesi kerja saat ini?',
+    icon: 'LOGOUT',
+    okText: 'Ya, Keluar'
   });
   if (!ok) return;
 
+  logActivity('Sesi Berakhir', 'Petugas keluar dari sistem.');
   clearSession();
   clearInterval(autoRefInt);
 
@@ -263,34 +410,39 @@ async function doLogout() {
   tokenAttempts = MAX_ATTEMPTS;
   updateAttemptDots();
   $('loginErr').classList.remove('show');
-  showToast('info', 'Anda telah keluar dari sistem.');
+  showToast('info', 'Sesi kerja telah diakhiri.');
 }
 
 function bootDashboard(displayName) {
   const session = getSession();
   $('officerName').textContent = displayName;
+  const initialEl = $('officerInitial');
+  if (initialEl) initialEl.textContent = (displayName || 'P').charAt(0).toUpperCase();
   if (session) $('sessionExpiry').textContent = getSessionAge(session);
 
   $('loginPage').classList.remove('visible');
   $('adminShell').style.display = 'block';
 
   loadLocalStatus();
+  loadAuditLogs();
   loadData();
   startClock();
   startAutoRefresh();
 }
 
-// ── Clock & Auto-Refresh ─────────────────────────────────────────
+// ── Live Clock & Auto-Refresh System ─────────────────────────────
 function startClock() {
   function tick() {
-    const n = new Date();
+    const now = new Date();
     const cl = $('liveClock');
     const de = $('liveDate');
-    if (cl) cl.textContent = n.toLocaleTimeString('id-ID', { hour12: false });
-    if (de) de.textContent = `${DAYS_ID[n.getDay()]}, ${n.getDate()} ${MONTH_SHORT[n.getMonth()]} ${n.getFullYear()}`;
+    if (cl) cl.textContent = now.toLocaleTimeString('id-ID', { hour12: false }) + ' WIB';
+    if (de) de.textContent = `${DAYS_ID[now.getDay()]}, ${now.getDate()} ${MONTH_SHORT[now.getMonth()]} ${now.getFullYear()}`;
     const session = getSession();
     const exp = $('sessionExpiry');
-    if (exp && session && n.getSeconds() === 0) exp.textContent = getSessionAge(session);
+    if (exp && session && now.getSeconds() === 0) {
+      exp.textContent = getSessionAge(session);
+    }
   }
   tick();
   setInterval(tick, 1000);
@@ -301,17 +453,21 @@ function startAutoRefresh() {
   clearInterval(autoRefInt);
 
   autoRefInt = setInterval(() => {
-    const anyOpen =
+    const anyModalOpen =
       $('modalOverlay').classList.contains('show') ||
       $('deleteOverlay').classList.contains('show') ||
       $('lightbox').classList.contains('show') ||
-      $('confirmOverlay').classList.contains('show');
+      $('confirmOverlay').classList.contains('show') ||
+      $('commandPaletteModal').classList.contains('show') ||
+      $('auditLogModal').classList.contains('show');
 
-    if (anyOpen) return;
+    if (anyModalOpen) return;
 
     arCountdown--;
     const el = $('arTimer');
+    const bar = $('arProgressBar');
     if (el) el.textContent = arCountdown + 's';
+    if (bar) bar.style.width = (arCountdown / REFRESH_SECS * 100) + '%';
 
     if (arCountdown <= 0) {
       loadData(false);
@@ -322,17 +478,22 @@ function startAutoRefresh() {
 
 // ── Local Status Cache ───────────────────────────────────────────
 function loadLocalStatus() {
-  try { localStatus = JSON.parse(localStorage.getItem(STATUS_KEY) || '{}'); }
-  catch { localStatus = {}; }
+  try {
+    localStatus = JSON.parse(localStorage.getItem(STATUS_KEY) || '{}');
+  } catch {
+    localStatus = {};
+  }
 }
+
 function saveLocalStatus() {
   localStorage.setItem(STATUS_KEY, JSON.stringify(localStatus));
 }
+
 function getRowKey(r) {
   return (r.nama || '') + '_' + (r.tanggal || '') + '_' + (r.jam || '') + '_' + (r.hp || '');
 }
 
-// ── Data Loading ─────────────────────────────────────────────────
+// ── Data Loading & Synchronization ───────────────────────────────
 function normTanggal(v) {
   if (!v) return '';
   const s = String(v);
@@ -371,26 +532,34 @@ async function loadData(manual = false) {
       };
     });
 
-    // Sort newest first
+    // Sort newest row first
     allData.sort((a, b) => (parseInt(b._rowIndex) || 0) - (parseInt(a._rowIndex) || 0));
 
     const lu = $('lastUpdate');
-    if (lu) lu.textContent = 'Terakhir: ' + new Date().toLocaleTimeString('id-ID', { hour12: false });
+    if (lu) lu.textContent = 'Sinkron: ' + new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
 
-    if (manual) showToast('success', '✓ Data berhasil diperbarui');
+    if (manual) {
+      playSuccessChime();
+      showToast('success', 'Data berhasil disinkronisasi dari lembar kerja');
+      logActivity('Sinkronisasi Data', `Memuat ${allData.length} data pendaftar.`);
+    }
+
     startAutoRefresh();
     buildMonthYearOptions();
 
   } catch (e) {
     console.error('loadData error:', e);
-    if (manual) showToast('error', '⚠ Gagal mengambil data dari server');
+    if (manual) {
+      playAlertChime();
+      showToast('error', 'Gagal menyinkronkan data dengan server.');
+    }
   }
 
   if (btn) btn.classList.remove('spinning');
   renderAll();
 }
 
-// ── Month/Year Filter ────────────────────────────────────────────
+// ── Month & Year Filtering Options ───────────────────────────────
 function getYearsFromData() {
   const set = new Set();
   allData.forEach(r => {
@@ -414,6 +583,7 @@ function getMonthsWithData(year) {
 
 function buildMonthYearOptions() {
   const yearSel = $('filterYear');
+  if (!yearSel) return;
   const years = getYearsFromData();
   const prevYear = yearSel.value;
 
@@ -421,8 +591,12 @@ function buildMonthYearOptions() {
     '<option value="">Semua Tahun</option>' +
     years.map(y => `<option value="${y}">${y}</option>`).join('');
 
-  if (prevYear && years.includes(prevYear)) yearSel.value = prevYear;
-  else { yearSel.value = ''; activeYear = ''; }
+  if (prevYear && years.includes(prevYear)) {
+    yearSel.value = prevYear;
+  } else {
+    yearSel.value = '';
+    activeYear = '';
+  }
 
   activeYear = yearSel.value;
   renderMonthChips();
@@ -430,9 +604,10 @@ function buildMonthYearOptions() {
 
 function renderMonthChips() {
   const container = $('monthChips');
+  if (!container) return;
   const months = getMonthsWithData(activeYear);
 
-  let html = `<button class="month-chip ${activeMonth === 'all' ? 'active active-all' : ''}" onclick="setMonthFilter('all')">Semua</button>`;
+  let html = `<button class="month-chip ${activeMonth === 'all' ? 'active' : ''}" onclick="setMonthFilter('all')">Semua Bulan</button>`;
   html += months.map(m => {
     const label = MONTH_SHORT[parseInt(m) - 1];
     return `<button class="month-chip ${activeMonth === m ? 'active' : ''}" onclick="setMonthFilter('${m}')">${label}</button>`;
@@ -445,15 +620,16 @@ function renderMonthChips() {
   const isActive = activeMonth !== 'all' || activeYear !== '';
 
   if (isActive) {
-    badge.style.display = 'inline-flex';
-    clearBtn.style.display = 'inline-flex';
+    if (badge) badge.style.display = 'inline-flex';
+    if (clearBtn) clearBtn.style.display = 'inline-flex';
     let txt = '';
     if (activeMonth !== 'all') txt += MONTH_SHORT[parseInt(activeMonth) - 1];
     if (activeYear) txt += (txt ? ' ' : '') + activeYear;
-    $('filterBadgeText').textContent = txt;
+    const bt = $('filterBadgeText');
+    if (bt) bt.textContent = txt;
   } else {
-    badge.style.display = 'none';
-    clearBtn.style.display = 'none';
+    if (badge) badge.style.display = 'none';
+    if (clearBtn) clearBtn.style.display = 'none';
   }
 }
 
@@ -466,14 +642,15 @@ function setMonthFilter(m) {
 function clearMonthFilter() {
   activeMonth = 'all';
   activeYear = '';
-  $('filterYear').value = '';
+  const ySel = $('filterYear');
+  if (ySel) ySel.value = '';
   renderMonthChips();
   resetPageAndRender();
 }
 
 function resetPageAndRender() {
   currentPage = 1;
-  activeYear = $('filterYear').value || '';
+  activeYear = $('filterYear')?.value || '';
   if (activeMonth !== 'all') {
     const available = getMonthsWithData(activeYear);
     if (!available.includes(activeMonth)) activeMonth = 'all';
@@ -482,7 +659,7 @@ function resetPageAndRender() {
   renderTable();
 }
 
-// ── Filtered Data ────────────────────────────────────────────────
+// ── Filtered Data Calculation ────────────────────────────────────
 function getFiltered() {
   const q = ($('searchInput')?.value || '').toLowerCase().trim();
   const fs = $('filterStatus')?.value || '';
@@ -492,48 +669,57 @@ function getFiltered() {
     const tgl = r.tanggal || '';
     if (activeYear && !tgl.startsWith(activeYear)) return false;
     if (activeMonth !== 'all' && tgl.slice(5, 7) !== activeMonth) return false;
-    const mQ = !q || (r.nama || '').toLowerCase().includes(q) ||
+    const mQ = !q || 
+      (r.nama || '').toLowerCase().includes(q) ||
       (r.reg || '').toLowerCase().includes(q) ||
-      (r.hp || '').includes(q);
+      (r.hp || '').includes(q) ||
+      (r.nik || '').includes(q);
     const mS = !fs || r.status === fs;
     const mJ = !fj || r.jenis_permohonan === fj;
     return mQ && mS && mJ;
   });
 }
 
-// ── Render All ───────────────────────────────────────────────────
+// ── Global Render Coordinator ────────────────────────────────────
 function renderAll() {
   renderStats();
+  renderTodayAgenda();
   renderDashTable();
   renderTable();
   renderRsTable();
   renderRecap();
 
-  // Nav badges
+  // Navigation Badges
   const waiting = allData.filter(r => r.status === 'Menunggu').length;
   const rsPending = allData.filter(r => r.reschedule_status === 'Pending').length;
 
-  $('navBadge').textContent = waiting;
+  const nb = $('navBadge');
+  if (nb) nb.textContent = waiting;
 
   const rsBadge = $('navRsBadge');
-  rsBadge.textContent = rsPending;
-  rsBadge.style.display = rsPending > 0 ? 'inline-flex' : 'none';
-
-  const meta = $('rsBannerMeta');
-  if (meta) {
-    meta.innerHTML = rsPending > 0
-      ? `<div class="banner-live" style="color:#fdba74;background:rgba(249,115,22,0.08);border-color:rgba(249,115,22,0.25);">${rsPending} Pending</div>`
-      : '';
+  if (rsBadge) {
+    rsBadge.textContent = rsPending;
+    rsBadge.style.display = rsPending > 0 ? 'inline-flex' : 'none';
   }
 }
 
-// ── Stat Cards ───────────────────────────────────────────────────
+// ── Metric Tiles ─────────────────────────────────────────────────
 function renderStats() {
-  animateNum('sc-total', allData.length);
-  animateNum('sc-wait', allData.filter(r => r.status === 'Menunggu').length);
-  animateNum('sc-conf', allData.filter(r => r.status === 'Dikonfirmasi').length);
-  animateNum('sc-done', allData.filter(r => r.status === 'Selesai').length);
-  animateNum('sc-rs', allData.filter(r => r.reschedule_status === 'Pending').length);
+  const total = allData.length || 0;
+  const wait = allData.filter(r => r.status === 'Menunggu').length;
+  const conf = allData.filter(r => r.status === 'Dikonfirmasi').length;
+  const done = allData.filter(r => r.status === 'Selesai').length;
+  const rs = allData.filter(r => r.reschedule_status === 'Pending').length;
+
+  animateNum('sc-total', total);
+  animateNum('sc-wait', wait);
+  animateNum('sc-conf', conf);
+  animateNum('sc-done', done);
+  animateNum('sc-rs', rs);
+
+  if ($('tileWaitRatio')) $('tileWaitRatio').textContent = total ? Math.round(wait / total * 100) + '%' : '0%';
+  if ($('tileConfRatio')) $('tileConfRatio').textContent = total ? Math.round(conf / total * 100) + '%' : '0%';
+  if ($('tileDoneRatio')) $('tileDoneRatio').textContent = total ? Math.round(done / total * 100) + '%' : '0%';
 }
 
 function animateNum(id, target) {
@@ -541,20 +727,62 @@ function animateNum(id, target) {
   if (!el) return;
   let cur = parseInt(el.textContent) || 0;
   const diff = Math.abs(target - cur);
-  if (diff === 0) return;
-  const step = Math.ceil(diff / 18) || 1;
+  if (diff === 0) { el.textContent = target; return; }
+  const step = Math.ceil(diff / 16) || 1;
   const iv = setInterval(() => {
-    cur = cur < target
-      ? Math.min(cur + step, target)
-      : Math.max(cur - step, target);
+    cur = cur < target ? Math.min(cur + step, target) : Math.max(cur - step, target);
     el.textContent = cur;
     if (cur === target) clearInterval(iv);
-  }, 28);
+  }, 24);
 }
 
-// ── Date Formatters ──────────────────────────────────────────────
+function filterFromTile(status) {
+  navTo('pendaftar', document.querySelector('[data-page=pendaftar]'));
+  const fs = $('filterStatus');
+  if (fs) {
+    fs.value = status === 'all' ? '' : status;
+    resetPageAndRender();
+  }
+}
+
+// ── Today's Agenda (Live Queue) ──────────────────────────────────
+function renderTodayAgenda() {
+  const container = $('todayQueueList');
+  const sub = $('todayAgendaSubtitle');
+  const stripCount = $('stripTodayCount');
+  if (!container) return;
+
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayItems = allData.filter(r => r.tanggal === todayStr);
+
+  if (stripCount) stripCount.textContent = todayItems.length;
+
+  if (!todayItems.length) {
+    if (sub) sub.textContent = 'Tidak ada pemohon terjadwal hari ini';
+    container.innerHTML = `
+      <div class="agenda-empty-state">
+        <p>Tidak ada jadwal pemeriksaan BAP untuk hari ini (${formatTgl(todayStr)}).</p>
+      </div>`;
+    return;
+  }
+
+  if (sub) sub.textContent = `${todayItems.length} pemohon terjadwal untuk hari ini`;
+
+  container.innerHTML = todayItems.map(r => `
+    <div class="agenda-item-card" onclick="openModal('${escKey(r._key)}')">
+      <div class="agenda-item-top">
+        <span class="agenda-sesi-pill">${escHtml(r.jam) || 'Sesi Terjadwal'}</span>
+        ${badgeHtml(r.status, r.reschedule_status)}
+      </div>
+      <div class="agenda-item-name">${escHtml(r.nama)}</div>
+      <div class="agenda-item-type">${escHtml(r.jenis_permohonan)}</div>
+    </div>
+  `).join('');
+}
+
+// ── Date Formatting Helpers (Zero Em-Dash) ───────────────────────
 function formatTgl(tgl) {
-  if (!tgl) return '—';
+  if (!tgl) return 'Belum ada';
   const s = String(tgl).slice(0, 10);
   if (!s.match(/^\d{4}-\d{2}-\d{2}$/)) return s;
   const [y, m, d] = s.split('-');
@@ -562,118 +790,108 @@ function formatTgl(tgl) {
 }
 
 function formatTglFull(tgl) {
-  if (!tgl) return '—';
+  if (!tgl) return 'Belum ditentukan';
   const s = String(tgl).slice(0, 10);
   if (!s.match(/^\d{4}-\d{2}-\d{2}$/)) return s;
   try {
     return new Date(s + 'T12:00:00').toLocaleDateString('id-ID', {
       weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
     });
-  } catch { return s; }
-}
-
-// ── Foto Ulang Selects ───────────────────────────────────────────
-function populateFotoUlangSelects() {
-  const hSel = $('fuHari'), bSel = $('fuBulan'), ySel = $('fuTahun');
-  if (!hSel || hSel.dataset.filled) return;
-  for (let d = 1; d <= 31; d++) {
-    const o = document.createElement('option');
-    o.value = String(d).padStart(2, '0');
-    o.textContent = d;
-    hSel.appendChild(o);
+  } catch {
+    return s;
   }
-  MONTH_FULL.forEach((m, i) => {
-    const o = document.createElement('option');
-    o.value = String(i + 1).padStart(2, '0');
-    o.textContent = m;
-    bSel.appendChild(o);
-  });
-  const thisYear = new Date().getFullYear();
-  for (let y = thisYear; y <= thisYear + 1; y++) {
-    const o = document.createElement('option');
-    o.value = String(y);
-    o.textContent = y;
-    ySel.appendChild(o);
+}
+
+// ── Status Badges HTML ───────────────────────────────────────────
+function badgeHtml(status, rsStatus) {
+  if (rsStatus === 'Pending') {
+    return `<span class="status-pill rs"><span class="status-pill-dot"></span>Pending RS</span>`;
   }
-  hSel.dataset.filled = '1';
+  if (status === 'Menunggu') {
+    return `<span class="status-pill wait"><span class="status-pill-dot"></span>Menunggu</span>`;
+  }
+  if (status === 'Dikonfirmasi') {
+    return `<span class="status-pill conf"><span class="status-pill-dot"></span>Dikonfirmasi</span>`;
+  }
+  if (status === 'Selesai') {
+    return `<span class="status-pill done"><span class="status-pill-dot"></span>Selesai</span>`;
+  }
+  return `<span class="status-pill wait"><span class="status-pill-dot"></span>${escHtml(status) || 'Menunggu'}</span>`;
 }
 
-function setFotoUlangValue(tglStr) {
-  populateFotoUlangSelects();
-  const s = String(tglStr || '').slice(0, 10);
-  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  $('fuTahun').value = m ? m[1] : '';
-  $('fuBulan').value = m ? m[2] : '';
-  $('fuHari').value = m ? m[3] : '';
+function rsBadgeHtml(s) {
+  if (s === 'Pending') {
+    return `<span class="status-pill rs"><span class="status-pill-dot"></span>Pending</span>`;
+  }
+  if (s === 'Disetujui') {
+    return `<span class="status-pill done"><span class="status-pill-dot"></span>Disetujui</span>`;
+  }
+  if (s === 'Ditolak') {
+    return `<span class="status-pill reject"><span class="status-pill-dot"></span>Ditolak</span>`;
+  }
+  return `<span class="status-pill wait">${escHtml(s) || 'Belum ada'}</span>`;
 }
 
-function getFotoUlangValue() {
-  const h = $('fuHari').value, b = $('fuBulan').value, y = $('fuTahun').value;
-  if (!h || !b || !y) return '';
-  return `${y}-${b}-${h}`;
-}
-
-function formatFotoUlangReadable(tglStr) {
-  const s = String(tglStr || '').slice(0, 10);
-  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (!m) return '—';
-  return `${parseInt(m[3])} ${MONTH_FULL[parseInt(m[2]) - 1]} ${m[1]}`;
-}
-
-// ── Highlight Search ─────────────────────────────────────────────
+// ── Highlight Search Query ───────────────────────────────────────
 function highlight(text, query) {
   if (!query) return escHtml(text);
   const esc = escHtml(text);
   const escQ = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return esc.replace(new RegExp(`(${escQ})`, 'gi'), '<mark class="search-hl">$1</mark>');
+  return esc.replace(new RegExp(`(${escQ})`, 'gi'), '<mark style="background:rgba(2,132,199,0.3);color:#ffffff;border-radius:2px;padding:0 2px;">$1</mark>');
 }
 
-// ── Dashboard Table ──────────────────────────────────────────────
+// ── Dashboard Recent Table ───────────────────────────────────────
 function setDashFilter(filter, el) {
   dashFilter = filter;
-  $$('#dashQuickFilter .month-chip').forEach(b => {
-    b.className = 'month-chip';
-    if (b === el) b.className = 'month-chip active' + (filter === 'all' ? ' active-all' : '');
+  $$('#dashQuickFilter .filter-chip').forEach(b => {
+    b.classList.remove('active');
   });
+  if (el) el.classList.add('active');
   renderDashTable();
 }
 
 function renderDashTable() {
   let data = allData.slice(0, 20);
   if (dashFilter !== 'all') {
-    if (dashFilter === 'Pending RS') {
-      data = allData.filter(r => r.reschedule_status === 'Pending').slice(0, 20);
-    } else {
-      data = allData.filter(r => r.status === dashFilter).slice(0, 20);
-    }
+    data = allData.filter(r => r.status === dashFilter).slice(0, 20);
   }
   const shown = data.slice(0, 10);
 
   const sub = $('dashTableSub');
-  if (sub) sub.textContent = shown.length + ' data ditampilkan' + (dashFilter !== 'all' ? ` · Filter: ${dashFilter}` : '');
+  if (sub) sub.textContent = `${shown.length} data pendaftar terbaru ditampilkan`;
 
   const tbody = $('dashBody');
+  if (!tbody) return;
+
   if (!shown.length) {
-    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text3)">Belum ada data</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6"><div class="table-empty-state"><div class="empty-state-title">Belum ada data pendaftar</div></div></td></tr>';
     return;
   }
-  tbody.innerHTML = shown.map((r, i) => `
-    <tr class="row-enter" style="animation-delay:${i * .04}s" onclick="openModal('${escKey(r._key)}')">
-      <td><span class="t-code">${escHtml(r.reg) || '—'}</span></td>
-      <td><div class="t-name">${escHtml(r.nama) || '—'}</div><div class="t-sub">${escHtml(r.jk) || ''}</div></td>
-      <td style="font-size:11.5px">${escHtml(r.jenis_permohonan) || '—'}</td>
-      <td style="font-size:11.5px">${formatTgl(r.tanggal)}<div class="t-sub">${escHtml(r.jam) || ''}</div></td>
-      <td>${badgeHtml(r.status, r.reschedule_status)}</td>
+
+  tbody.innerHTML = shown.map(r => `
+    <tr onclick="openModal('${escKey(r._key)}')">
+      <td><span class="t-reg-code">${escHtml(r.reg) || 'Belum ada'}</span></td>
       <td>
-        <div style="display:flex;gap:5px">
-          <button class="action-btn" onclick="event.stopPropagation();openModal('${escKey(r._key)}')">👁</button>
-          ${r.hp ? `<button class="action-btn wa" onclick="event.stopPropagation();openWA('${escKey(r.hp)}')" title="WhatsApp">📱</button>` : ''}
+        <div class="t-name-cell">${escHtml(r.nama) || 'Pemohon'}</div>
+        <div class="t-sub-info">${escHtml(r.jk) || ''}</div>
+      </td>
+      <td>${escHtml(r.jenis_permohonan) || 'BAP Paspor'}</td>
+      <td>
+        <div>${formatTgl(r.tanggal)}</div>
+        <div class="t-sub-info">${escHtml(r.jam) || ''}</div>
+      </td>
+      <td>${badgeHtml(r.status, r.reschedule_status)}</td>
+      <td style="text-align: right;">
+        <div class="table-btn-group">
+          <button class="tbl-action-btn" onclick="event.stopPropagation();openModal('${escKey(r._key)}')">Detail</button>
+          ${r.hp ? `<button class="tbl-action-btn wa" onclick="event.stopPropagation();openWA('${escKey(r.hp)}')" title="Hubungi via WhatsApp">WA</button>` : ''}
         </div>
       </td>
-    </tr>`).join('');
+    </tr>
+  `).join('');
 }
 
-// ── Main Table ───────────────────────────────────────────────────
+// ── Main Pendaftar Database Table ────────────────────────────────
 function renderTable() {
   const q = ($('searchInput')?.value || '').trim();
   const filtered = getFiltered();
@@ -685,63 +903,135 @@ function renderTable() {
   const start = (currentPage - 1) * PAGE_SIZE;
   const page = filtered.slice(start, start + PAGE_SIZE);
 
-  // Subtitle
-  let subtitleTxt = total + ' data ditemukan';
-  if (activeMonth !== 'all' || activeYear) {
-    let label = '';
-    if (activeMonth !== 'all') label += MONTH_SHORT[parseInt(activeMonth) - 1];
-    if (activeYear) label += (label ? ' ' : '') + activeYear;
-    subtitleTxt += ` · Filter: ${label}`;
-  }
-  $('tblSubtitle').textContent = subtitleTxt;
-  $('pgInfo').textContent = `Menampilkan ${total ? start + 1 : 0}–${Math.min(start + PAGE_SIZE, total)} dari ${total}`;
+  const sub = $('tblSubtitle');
+  if (sub) sub.textContent = `${total} data pemohon ditemukan`;
+
+  const pgInfo = $('pgInfo');
+  if (pgInfo) pgInfo.textContent = `Menampilkan baris ${total ? start + 1 : 0} sampai ${Math.min(start + PAGE_SIZE, total)} dari total ${total} data`;
 
   const tbody = $('mainBody');
+  if (!tbody) return;
+
   if (!page.length) {
-    tbody.innerHTML = `<tr><td colspan="9"><div class="empty-state"><div class="empty-ic">🔍</div><h3>Tidak ada data</h3><p>Coba ubah filter atau kata pencarian</p></div></td></tr>`;
-  } else {
-    tbody.innerHTML = page.map((r, i) => `
-      <tr class="row-enter" style="animation-delay:${i * .03}s" onclick="openModal('${escKey(r._key)}')">
-        <td style="color:var(--text3);font-size:11px">${start + i + 1}</td>
-        <td><span class="t-code">${escHtml(r.reg) || '—'}</span></td>
-        <td><div class="t-name">${highlight(r.nama, q) || '—'}</div><div class="t-sub">${escHtml(r.ttl) || ''}</div></td>
-        <td style="font-size:11.5px;font-family:'JetBrains Mono',monospace;color:var(--text2)">${escHtml(r.hp) || '—'}</td>
-        <td style="font-size:11.5px">${escHtml(r.jenis_permohonan) || '—'}</td>
-        <td style="font-size:11.5px">${formatTgl(r.tanggal)}<div class="t-sub">${escHtml(r.jam) || ''}</div></td>
-        <td>${badgeHtml(r.status, r.reschedule_status)}</td>
-        <td style="font-size:10px;color:var(--text3)">${escHtml(r.waktu_daftar) || '—'}</td>
-        <td>
-          <div style="display:flex;gap:4px;align-items:center">
-            <button class="action-btn" title="Detail" onclick="event.stopPropagation();openModal('${escKey(r._key)}')">👁</button>
-            ${r.hp ? `<button class="action-btn wa" title="WhatsApp" onclick="event.stopPropagation();openWA('${escKey(r.hp)}')">📱</button>` : ''}
-            <button class="action-btn del" title="Hapus" onclick="event.stopPropagation();openDeleteFromTable('${escKey(r._key)}')">🗑️</button>
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="10">
+          <div class="table-empty-state">
+            <div class="empty-state-title">Tidak ada data yang cocok</div>
+            <div class="empty-state-sub">Ubah kata kunci pencarian atau sesuaikan filter status dan bulan.</div>
           </div>
         </td>
-      </tr>`).join('');
+      </tr>`;
+  } else {
+    tbody.innerHTML = page.map((r, i) => {
+      const isChecked = selectedRowKeys.has(r._key);
+      return `
+        <tr class="${isChecked ? 'row-selected' : ''}" onclick="openModal('${escKey(r._key)}')">
+          <td onclick="event.stopPropagation()">
+            <input type="checkbox" ${isChecked ? 'checked' : ''} onchange="toggleRowSelection('${escKey(r._key)}', this)">
+          </td>
+          <td style="color:var(--text-muted);font-size:11px">${start + i + 1}</td>
+          <td><span class="t-reg-code">${escHtml(r.reg) || 'Belum ada'}</span></td>
+          <td>
+            <div class="t-name-cell">${highlight(r.nama, q) || 'Pemohon'}</div>
+            <div class="t-sub-info">${escHtml(r.ttl) || ''}</div>
+          </td>
+          <td class="t-phone-cell">${escHtml(r.hp) || 'Belum ada'}</td>
+          <td>${escHtml(r.jenis_permohonan) || 'BAP'}</td>
+          <td>
+            <div>${formatTgl(r.tanggal)}</div>
+            <div class="t-sub-info">${escHtml(r.jam) || ''}</div>
+          </td>
+          <td>${badgeHtml(r.status, r.reschedule_status)}</td>
+          <td style="font-size:11px;color:var(--text-muted)">${escHtml(r.waktu_daftar) || 'Belum ada'}</td>
+          <td style="text-align: right;" onclick="event.stopPropagation()">
+            <div class="table-btn-group">
+              <button class="tbl-action-btn" title="Buka Detail" onclick="openModal('${escKey(r._key)}')">Buka</button>
+              ${r.hp ? `<button class="tbl-action-btn wa" title="Hubungi via WhatsApp" onclick="openWA('${escKey(r.hp)}')">WA</button>` : ''}
+              <button class="tbl-action-btn danger" title="Hapus Data" onclick="openDeleteFromTable('${escKey(r._key)}')">Hapus</button>
+            </div>
+          </td>
+        </tr>`;
+    }).join('');
   }
+
   renderPagination(totalPages);
+  updateBulkActionBar();
 }
 
 function renderPagination(total) {
-  let html = `<button class="pg-btn" onclick="changePage(${currentPage - 1})" ${currentPage <= 1 ? 'disabled' : ''} aria-label="Halaman sebelumnya">←</button>`;
+  const container = $('pgBtns');
+  if (!container) return;
+
+  let html = `<button class="pg-btn" onclick="changePage(${currentPage - 1})" ${currentPage <= 1 ? 'disabled' : ''} aria-label="Halaman Sebelumnya">&lt;</button>`;
   const s = Math.max(1, currentPage - 2);
   const e = Math.min(total, s + 4);
   for (let i = s; i <= e; i++) {
-    html += `<button class="pg-btn ${i === currentPage ? 'active' : ''}" onclick="changePage(${i})" aria-label="Halaman ${i}" aria-current="${i === currentPage ? 'page' : 'false'}">${i}</button>`;
+    html += `<button class="pg-btn ${i === currentPage ? 'active' : ''}" onclick="changePage(${i})">${i}</button>`;
   }
-  html += `<button class="pg-btn" onclick="changePage(${currentPage + 1})" ${currentPage >= total ? 'disabled' : ''} aria-label="Halaman berikutnya">→</button>`;
-  $('pgBtns').innerHTML = html;
+  html += `<button class="pg-btn" onclick="changePage(${currentPage + 1})" ${currentPage >= total ? 'disabled' : ''} aria-label="Halaman Berikutnya">&gt;</button>`;
+  container.innerHTML = html;
 }
 
 function changePage(p) {
   currentPage = p;
   renderTable();
-  // Scroll to table, not top of page
-  const tableCard = document.querySelector('#page-pendaftar .table-card');
-  if (tableCard) tableCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
-// ── WhatsApp Quick Action ────────────────────────────────────────
+// ── Bulk Selection & Actions ─────────────────────────────────────
+function toggleRowSelection(key, checkbox) {
+  if (checkbox.checked) selectedRowKeys.add(key);
+  else selectedRowKeys.delete(key);
+  updateBulkActionBar();
+}
+
+function toggleSelectAllRows(checkbox) {
+  const filtered = getFiltered();
+  const start = (currentPage - 1) * PAGE_SIZE;
+  const page = filtered.slice(start, start + PAGE_SIZE);
+
+  page.forEach(r => {
+    if (checkbox.checked) selectedRowKeys.add(r._key);
+    else selectedRowKeys.delete(r._key);
+  });
+  renderTable();
+}
+
+function clearRowSelection() {
+  selectedRowKeys.clear();
+  const selectAll = $('selectAllRows');
+  if (selectAll) selectAll.checked = false;
+  renderTable();
+}
+
+function updateBulkActionBar() {
+  const bar = $('bulkActionBar');
+  const countEl = $('bulkSelectedCount');
+  if (!bar || !countEl) return;
+
+  const count = selectedRowKeys.size;
+  countEl.textContent = count;
+  bar.style.display = count > 0 ? 'flex' : 'none';
+}
+
+function bulkCopyPhones() {
+  const phones = [];
+  allData.forEach(r => {
+    if (selectedRowKeys.has(r._key) && r.hp) {
+      phones.push(r.hp.trim());
+    }
+  });
+  if (!phones.length) {
+    showToast('error', 'Tidak ada nomor telepon pada data yang dipilih');
+    return;
+  }
+  navigator.clipboard.writeText(phones.join(', ')).then(() => {
+    playSuccessChime();
+    showToast('success', `${phones.length} nomor WhatsApp berhasil disalin`);
+  });
+}
+
+// ── WhatsApp Direct Sender ───────────────────────────────────────
 function openWA(hp) {
   if (!hp) return;
   const clean = String(hp).replace(/\D/g, '');
@@ -749,17 +1039,17 @@ function openWA(hp) {
   window.open(`https://wa.me/${intl}`, '_blank');
 }
 
-// ── Reschedule Table ─────────────────────────────────────────────
+// ── Reschedule Page Table & Actions ──────────────────────────────
 function setRsFilter(val, el) {
   rsFilter = val;
-  $$('.rs-filter-btn').forEach(b => b.classList.remove('active'));
+  $$('.tab-pill-btn').forEach(b => b.classList.remove('active'));
   if (el) el.classList.add('active');
   renderRsTable();
 }
 
 function getRsData() {
   return allData.filter(r => {
-    if (!r.reschedule_status || r.reschedule_status === '') return false;
+    if (!r.reschedule_status) return false;
     if (rsFilter === 'all') return true;
     return r.reschedule_status === rsFilter;
   });
@@ -768,63 +1058,74 @@ function getRsData() {
 function renderRsTable() {
   const data = getRsData();
   const sub = $('rsSubtitle');
-  if (sub) sub.textContent = data.length + ' pengajuan ditemukan';
+  if (sub) sub.textContent = `${data.length} pengajuan reschedule ditemukan`;
 
   const tbody = $('rsBody');
+  if (!tbody) return;
+
   if (!data.length) {
-    tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><div class="empty-ic">🔄</div><h3>Tidak ada pengajuan</h3><p>Belum ada pengajuan reschedule${rsFilter !== 'all' ? ' dengan status ' + rsFilter : ''}</p></div></td></tr>`;
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="8">
+          <div class="table-empty-state">
+            <div class="empty-state-title">Tidak ada permohonan reschedule</div>
+            <div class="empty-state-sub">Belum ada pengajuan perubahan jadwal dengan status terpilih.</div>
+          </div>
+        </td>
+      </tr>`;
     return;
   }
-  tbody.innerHTML = data.map((r, i) => `
-    <tr class="row-enter" style="animation-delay:${i * .03}s" onclick="openModal('${escKey(r._key)}')">
-      <td><span class="t-code">${escHtml(r.reg) || '—'}</span></td>
-      <td><div class="t-name">${escHtml(r.nama) || '—'}</div></td>
-      <td style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--text2)">${escHtml(r.nik) || '—'}</td>
-      <td><div class="rs-jadwal-row"><div style="font-size:11px;color:var(--text2)">${formatTgl(r.tanggal)}</div><div style="font-size:10px;color:var(--text3)">${escHtml(r.jam) || '—'}</div></div></td>
-      <td><div class="rs-jadwal-row"><div class="rs-jadwal-new">${formatTgl(r.reschedule_tanggal) || '—'}</div><div style="font-size:10px;color:#fdba74">${escHtml(r.reschedule_jam) || '—'}</div></div></td>
-      <td style="max-width:155px"><div style="font-size:11px;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escHtml(r.reschedule_alasan)}">${escHtml(r.reschedule_alasan) || '—'}</div></td>
+
+  tbody.innerHTML = data.map(r => `
+    <tr onclick="openModal('${escKey(r._key)}')">
+      <td><span class="t-reg-code">${escHtml(r.reg) || 'Belum ada'}</span></td>
+      <td><div class="t-name-cell">${escHtml(r.nama) || 'Pemohon'}</div></td>
+      <td style="font-family:'JetBrains Mono',monospace;font-size:11px">${escHtml(r.nik) || 'Belum ada'}</td>
+      <td>
+        <div class="rs-jadwal-stack">
+          <span class="rs-date-text">${formatTgl(r.tanggal)}</span>
+          <span class="rs-time-text">${escHtml(r.jam) || ''}</span>
+        </div>
+      </td>
+      <td>
+        <div class="rs-jadwal-stack">
+          <span class="rs-date-text rs-new-target">${formatTgl(r.reschedule_tanggal)}</span>
+          <span class="rs-time-text rs-new-target">${escHtml(r.reschedule_jam) || ''}</span>
+        </div>
+      </td>
+      <td>
+        <div style="max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escHtml(r.reschedule_alasan)}">
+          ${escHtml(r.reschedule_alasan) || 'Tidak ada alasan'}
+        </div>
+      </td>
       <td>${rsBadgeHtml(r.reschedule_status)}</td>
-      <td>${r.reschedule_status === 'Pending'
-      ? `<div style="display:flex;gap:5px"><button class="action-btn approve" onclick="event.stopPropagation();approveReschedule('${escKey(r._key)}')">✓ Setuju</button><button class="action-btn reject" onclick="event.stopPropagation();rejectReschedule('${escKey(r._key)}')">✕ Tolak</button></div>`
-      : `<button class="action-btn" onclick="event.stopPropagation();openModal('${escKey(r._key)}')">👁 Detail</button>`
-    }</td>
-    </tr>`).join('');
+      <td style="text-align: right;" onclick="event.stopPropagation()">
+        ${r.reschedule_status === 'Pending' ? `
+          <div class="table-btn-group">
+            <button class="tbl-action-btn approve" onclick="approveReschedule('${escKey(r._key)}')">Setujui</button>
+            <button class="tbl-action-btn reject" onclick="rejectReschedule('${escKey(r._key)}')">Tolak</button>
+          </div>
+        ` : `
+          <button class="tbl-action-btn" onclick="openModal('${escKey(r._key)}')">Detail</button>
+        `}
+      </td>
+    </tr>
+  `).join('');
 }
 
-// ── Badge Helpers ────────────────────────────────────────────────
-function badgeHtml(status, rsStatus) {
-  if (rsStatus === 'Pending') return `<span class="badge badge-prs"><span class="badge-dot"></span>Pending RS</span>`;
-  if (status === 'Menunggu') return `<span class="badge badge-wait"><span class="badge-dot"></span>Menunggu</span>`;
-  if (status === 'Dikonfirmasi') return `<span class="badge badge-conf"><span class="badge-dot"></span>Dikonfirmasi</span>`;
-  if (status === 'Selesai') return `<span class="badge badge-done"><span class="badge-dot"></span>Selesai</span>`;
-  return `<span class="badge" style="background:var(--surface2);color:var(--text2)">${escHtml(status) || '—'}</span>`;
-}
-function rsBadgeHtml(s) {
-  if (s === 'Pending') return `<span class="badge badge-rspending"><span class="badge-dot"></span>Pending</span>`;
-  if (s === 'Disetujui') return `<span class="badge badge-rsapprove"><span class="badge-dot"></span>Disetujui</span>`;
-  if (s === 'Ditolak') return `<span class="badge badge-rsreject"><span class="badge-dot"></span>Ditolak</span>`;
-  return `<span class="badge" style="background:var(--surface2);color:var(--text3)">${escHtml(s) || '—'}</span>`;
-}
-function badgeText(s, rs) {
-  if (rs === 'Pending') return 'Pending Reschedule';
-  return s || 'Menunggu';
-}
-
-// ── Reschedule Actions ───────────────────────────────────────────
 async function approveReschedule(key) {
   const row = allData.find(r => r._key === key);
   if (!row || !row._rowIndex) return;
 
   const ok = await showConfirm({
-    title: 'Setujui Reschedule',
+    title: 'Persetujuan Reschedule',
     msg: `Setujui perubahan jadwal untuk ${row.nama}?\nJadwal baru: ${formatTgl(row.reschedule_tanggal)}, ${row.reschedule_jam}`,
-    icon: '✅',
-    okText: 'Ya, Setujui',
-    type: 'success'
+    icon: 'SETUJU',
+    okText: 'Ya, Setujui Jadwal'
   });
   if (!ok) return;
 
-  showToast('info', '⏳ Memproses...');
+  showToast('info', 'Memproses persetujuan reschedule...');
   try {
     const res = await fetch(SHEET_URL, {
       method: 'POST',
@@ -843,13 +1144,15 @@ async function approveReschedule(key) {
       row.jam = row.reschedule_jam;
       row.reschedule_status = 'Disetujui';
       row.status = 'Dikonfirmasi';
-      showToast('success', '✓ Reschedule disetujui! Jadwal diperbarui.');
+      playSuccessChime();
+      showToast('success', 'Jadwal baru berhasil disetujui');
+      logActivity('Reschedule Disetujui', `Persetujuan perubahan jadwal ${row.nama} ke ${row.tanggal}.`);
       renderAll();
     } else {
-      showToast('error', '⚠ Gagal: ' + (json.error || 'Error server'));
+      showToast('error', 'Gagal memproses persetujuan di server');
     }
   } catch {
-    showToast('error', '⚠ Gagal terhubung ke server');
+    showToast('error', 'Gagal terhubung ke server');
   }
 }
 
@@ -858,15 +1161,14 @@ async function rejectReschedule(key) {
   if (!row || !row._rowIndex) return;
 
   const ok = await showConfirm({
-    title: 'Tolak Reschedule',
-    msg: `Tolak pengajuan reschedule untuk ${row.nama}?\nJadwal lama akan tetap berlaku.`,
-    icon: '❌',
-    okText: 'Ya, Tolak',
-    type: 'danger'
+    title: 'Penolakan Reschedule',
+    msg: `Tolak pengajuan jadwal baru untuk ${row.nama}?\nJadwal awal tetap berlaku.`,
+    icon: 'TOLAK',
+    okText: 'Ya, Tolak Permohonan'
   });
   if (!ok) return;
 
-  showToast('info', '⏳ Memproses...');
+  showToast('info', 'Memproses penolakan...');
   try {
     const res = await fetch(SHEET_URL, {
       method: 'POST',
@@ -877,39 +1179,45 @@ async function rejectReschedule(key) {
     if (json.ok) {
       row.reschedule_status = 'Ditolak';
       row.status = 'Menunggu';
-      showToast('info', 'Reschedule ditolak. Jadwal lama tetap berlaku.');
+      showToast('info', 'Pengajuan reschedule ditolak. Jadwal lama tetap berlaku.');
+      logActivity('Reschedule Ditolak', `Penolakan reschedule pemohon ${row.nama}.`);
       renderAll();
     } else {
-      showToast('error', '⚠ Gagal: ' + (json.error || 'Error server'));
+      showToast('error', 'Gagal memproses penolakan di server');
     }
   } catch {
-    showToast('error', '⚠ Gagal terhubung ke server');
+    showToast('error', 'Gagal terhubung ke server');
   }
 }
 
-// ── Modal Open/Close ─────────────────────────────────────────────
+// ── Detail Applicant Modal ───────────────────────────────────────
 function openModal(key) {
   const row = allData.find(r => r._key === key);
   if (!row) return;
   currentRow = row;
 
-  // Header
-  $('mTitle').textContent = row.nama || '—';
-  $('mSub').textContent = (row.reg || '—') + ' · ' + badgeText(row.status, row.reschedule_status);
+  // Header Elements
+  $('mTitle').textContent = row.nama || 'Pemohon BAP';
+  $('m-header-reg').textContent = row.reg || 'BAP-00000000-0000';
+  const stBadge = $('m-header-status');
+  if (stBadge) {
+    stBadge.className = 'mhb-status-badge ' + (row.status === 'Selesai' ? 'done' : row.status === 'Dikonfirmasi' ? 'conf' : 'wait');
+    stBadge.textContent = row.status || 'Menunggu';
+  }
 
-  // Data tab
-  $('m-reg').textContent = row.reg || '—';
-  $('m-waktu').textContent = row.waktu_daftar || '—';
-  $('m-nama').textContent = row.nama || '—';
-  $('m-ttl').textContent = row.ttl || '—';
-  $('m-jk').textContent = row.jk || '—';
-  $('m-hp').textContent = row.hp || '—';
-  $('m-jadwal').textContent = formatTglFull(row.tanggal) + ' · ' + (row.jam || '—');
-  $('m-jenis').textContent = row.jenis_permohonan || '—';
-  $('m-paspor').textContent = row.jenis_paspor || '—';
-  $('m-tujuan').textContent = row.tujuan || '—';
+  // Data Tab Elements
+  $('m-reg').textContent = row.reg || 'Belum ada';
+  $('m-waktu').textContent = row.waktu_daftar || 'Belum ada';
+  $('m-nama').textContent = row.nama || 'Pemohon';
+  $('m-ttl').textContent = row.ttl || 'Belum ada';
+  $('m-jk').textContent = row.jk || 'Belum ada';
+  $('m-hp').textContent = row.hp || 'Belum ada';
+  $('m-jadwal').textContent = `${formatTglFull(row.tanggal)} (Sesi: ${row.jam || 'Belum ditentukan'})`;
+  $('m-jenis').textContent = row.jenis_permohonan || 'BAP Paspor';
+  $('m-paspor').textContent = row.jenis_paspor || 'Paspor Biasa';
+  $('m-tujuan').textContent = row.tujuan || 'Tidak ada keterangan';
 
-  // Foto ulang info
+  // Photo Schedule
   const fuItem = $('m-fu-item');
   if (row.foto_ulang_tanggal && String(row.foto_ulang_tanggal).trim() !== '') {
     fuItem.style.display = 'block';
@@ -918,106 +1226,48 @@ function openModal(key) {
     fuItem.style.display = 'none';
   }
 
-  // Documents tab
-  const DOCS = [
-    { key: 'url_ktp', label: 'E-KTP', icon: '🪪' },
-    { key: 'url_kk', label: 'Kartu Keluarga', icon: '👨‍👩‍👧' },
-    { key: 'url_akta', label: 'Akta / Ijazah / Buku Nikah', icon: '📜' },
-    { key: 'url_foto_paspor', label: 'Foto Paspor Rusak/Hilang', icon: '📕' },
-    { key: 'url_surat_polisi', label: 'Surat Keterangan Polisi', icon: '🚔' },
-    { key: 'url_surat_kelurahan', label: 'Surat Keterangan Kelurahan', icon: '🏢' },
-    { key: 'url_surat_pemerintah', label: 'Surat Resmi Pemerintah', icon: '🏛️' },
-    { key: 'url_pendukung', label: 'Dokumen Pendukung', icon: '📄' },
-  ];
-  const container = $('docContainer');
-  const hasAny = DOCS.some(d => row[d.key] && String(row[d.key]).trim() !== '');
-  if (!hasAny) {
-    container.innerHTML = `<div style="text-align:center;padding:48px 20px;color:var(--text3)"><div style="font-size:40px;margin-bottom:12px;opacity:0.18">📂</div><div style="font-size:14px;font-weight:700;margin-bottom:5px;color:var(--text2)">Tidak ada dokumen</div><div style="font-size:12px">Pemohon belum melampirkan dokumen apapun.</div></div>`;
-  } else {
-    container.innerHTML = DOCS.map(d => {
-      const url = row[d.key];
-      if (!url || String(url).trim() === '') {
-        return `<div class="doc-block"><div class="doc-block-head"><span class="dh-icon">${d.icon}</span><span class="dh-label">${d.label}</span><span class="dh-badge tdk">Tidak dilampirkan</span></div></div>`;
-      }
-      const isPdf = url.toLowerCase().includes('.pdf') || url.toLowerCase().includes('/raw/');
-      const safeUrl = url.replace(/'/g, "\\'");
-      return `<div class="doc-block"><div class="doc-block-head"><span class="dh-icon">${d.icon}</span><span class="dh-label">${d.label}</span><span class="dh-badge ada">✓ Tersedia</span></div><div class="doc-img-area">${isPdf
-        ? `<div style="text-align:center;color:var(--text3)"><div style="font-size:38px;margin-bottom:10px">📄</div><div style="font-size:12.5px;margin-bottom:12px">File PDF</div><a href="${url}" target="_blank" rel="noopener" style="background:var(--sky-500);color:white;padding:8px 18px;border-radius:9px;font-size:12px;font-weight:800;text-decoration:none">⤢ Buka PDF</a></div>`
-        : `<img src="${url}" alt="${d.label}" loading="lazy" onclick="openLightbox('${safeUrl}','${d.label}')" onerror="this.style.display='none';this.nextElementSibling.style.display='block'" title="Klik untuk zoom"><div class="doc-img-error" style="display:none">Gagal memuat gambar.<br><a href="${url}" target="_blank" rel="noopener">Buka di tab baru →</a></div>`
-        }<a href="${url}" target="_blank" rel="noopener" class="doc-open-pill">⤢ Buka</a></div></div>`;
-    }).join('');
-  }
+  // Documents Tab & Inspection Studio
+  renderDocumentsStudio(row);
 
-  // Status tab
+  // Status Tab
   $('m-note').value = row.note || '';
   const isDone = row.status === 'Selesai';
 
-  $$('.status-opt').forEach(o => {
-    o.className = 'status-opt';
+  $$('.status-card-opt').forEach(o => {
+    o.classList.remove('selected-wait', 'selected-conf', 'selected-done');
     if (o.dataset.val === row.status) {
       o.classList.add(
         row.status === 'Menunggu' ? 'selected-wait' :
-          row.status === 'Dikonfirmasi' ? 'selected-conf' : 'selected-done'
+        row.status === 'Dikonfirmasi' ? 'selected-conf' : 'selected-done'
       );
     }
   });
 
-  // Lock done options
-  $$('.status-opt[data-val="Menunggu"], .status-opt[data-val="Dikonfirmasi"]').forEach(o => {
-    o.style.display = isDone ? 'none' : '';
-  });
-  const doneOpt = document.querySelector('.status-opt[data-val="Selesai"]');
-  if (isDone && doneOpt) doneOpt.classList.add('locked');
-  $('statusLockedNote').style.display = isDone ? 'block' : 'none';
-
-  // Foto ulang section in status tab
   const fuSection = $('fotoUlangSection');
   if (isDone) {
-    fuSection.style.display = 'block';
+    if (fuSection) fuSection.style.display = 'block';
     setFotoUlangValue(row.foto_ulang_tanggal);
   } else {
-    fuSection.style.display = 'none';
+    if (fuSection) fuSection.style.display = 'none';
   }
+  $('statusLockedNote').style.display = isDone ? 'block' : 'none';
 
-  // Reschedule tab
+  // WhatsApp Tab
+  const waTarget = $('waRecipientNumber');
+  if (waTarget) waTarget.textContent = `Tujuan: ${row.hp || 'Belum ada nomor'}`;
+  applyWATemplate('konfirmasi');
+
+  // Reschedule Tab
   const rsTabEl = $('rsTab');
   const hasRs = row.reschedule_status && row.reschedule_status !== '';
-  rsTabEl.style.display = hasRs ? 'block' : 'none';
-  if (hasRs) {
-    const panel = $('rsDetailPanel');
-    const isApproved = row.reschedule_status === 'Disetujui';
-    const isRejected = row.reschedule_status === 'Ditolak';
-    panel.innerHTML = `<div class="rs-detail-panel">
-      <h4>🔄 Detail Pengajuan Reschedule &nbsp;${rsBadgeHtml(row.reschedule_status)}</h4>
-      <div class="rs-detail-grid">
-        <div class="rs-detail-item"><div class="rs-detail-key">Jadwal Lama</div><div class="rs-detail-val">${formatTglFull(row.tanggal)}, ${escHtml(row.jam) || '—'}</div></div>
-        <div class="rs-detail-item"><div class="rs-detail-key">Jadwal Baru Diminta</div><div class="rs-detail-val" style="color:#fdba74">${formatTglFull(row.reschedule_tanggal)}, ${escHtml(row.reschedule_jam) || '—'}</div></div>
-        <div class="rs-detail-item full"><div class="rs-detail-key">Alasan Reschedule</div><div class="rs-detail-val">${escHtml(row.reschedule_alasan) || '—'}</div></div>
-      </div>
-      ${row.reschedule_status === 'Pending'
-        ? `<div class="rs-action-row">
-            <button class="rs-approve-btn" onclick="approveRescheduleModal()">✓ Setujui Reschedule</button>
-            <button class="rs-reject-btn" onclick="rejectRescheduleModal()">✕ Tolak Reschedule</button>
-           </div>`
-        : isApproved
-          ? `<div style="margin-top:12px;padding:11px 14px;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.22);border-radius:10px;font-size:12px;color:#86efac;font-weight:700">✅ Reschedule telah disetujui. Jadwal telah diperbarui.</div>`
-          : isRejected
-            ? `<div style="margin-top:12px;padding:11px 14px;background:rgba(239,68,68,0.07);border:1px solid rgba(239,68,68,0.2);border-radius:10px;font-size:12px;color:#fca5a5;font-weight:700">❌ Reschedule ditolak. Jadwal lama tetap berlaku.</div>`
-            : ''
-      }
-    </div>`;
-  }
+  if (rsTabEl) rsTabEl.style.display = hasRs ? 'block' : 'none';
+  if (hasRs) renderRescheduleDetail(row);
 
-  switchTab('data', document.querySelector('.mtab[data-tab="data"]'));
+  // Reset to identity tab
+  switchTab('data', document.querySelector('.modal-nav-tab[data-tab="data"]'));
+
   $('modalOverlay').classList.add('show');
   document.body.style.overflow = 'hidden';
-}
-
-function approveRescheduleModal() {
-  if (currentRow) approveReschedule(currentRow._key).then(() => closeModal());
-}
-function rejectRescheduleModal() {
-  if (currentRow) rejectReschedule(currentRow._key).then(() => closeModal());
 }
 
 function closeModal() {
@@ -1027,21 +1277,131 @@ function closeModal() {
 }
 
 function switchTab(name, el) {
-  $$('.tab-panel').forEach(p => { p.classList.remove('active'); p.setAttribute('hidden', ''); });
-  $$('.mtab').forEach(t => { t.classList.remove('active'); t.setAttribute('aria-selected', 'false'); });
+  $$('.modal-tab-panel').forEach(p => p.classList.remove('active'));
+  $$('.modal-nav-tab').forEach(t => {
+    t.classList.remove('active');
+    t.setAttribute('aria-selected', 'false');
+  });
 
   const panel = $('tab-' + name);
-  if (panel) { panel.classList.add('active'); panel.removeAttribute('hidden'); }
-  if (el) { el.classList.add('active'); el.setAttribute('aria-selected', 'true'); }
+  if (panel) panel.classList.add('active');
+  if (el) {
+    el.classList.add('active');
+    el.setAttribute('aria-selected', 'true');
+  }
 }
 
+// ── Document Inspection Studio ───────────────────────────────────
+function renderDocumentsStudio(row) {
+  const DOCS = [
+    { key: 'url_ktp', label: 'E-KTP Pemohon' },
+    { key: 'url_kk', label: 'Kartu Keluarga' },
+    { key: 'url_akta', label: 'Akta Lahir / Buku Nikah / Ijazah' },
+    { key: 'url_foto_paspor', label: 'Foto Paspor Lama / Rusak' },
+    { key: 'url_surat_polisi', label: 'Surat Keterangan Kepolisian' },
+    { key: 'url_surat_kelurahan', label: 'Surat Keterangan Kelurahan' },
+    { key: 'url_surat_pemerintah', label: 'Surat Dinas / Rekomendasi Pemerintah' },
+    { key: 'url_pendukung', label: 'Berkas Pendukung Lainnya' }
+  ];
+
+  const container = $('docContainer');
+  const countPill = $('docCountPill');
+  if (!container) return;
+
+  let availableCount = 0;
+  DOCS.forEach(d => {
+    if (row[d.key] && String(row[d.key]).trim() !== '') availableCount++;
+  });
+  if (countPill) countPill.textContent = availableCount;
+
+  container.innerHTML = DOCS.map((d, idx) => {
+    const url = row[d.key];
+    const isAvailable = Boolean(url && String(url).trim() !== '');
+    if (!isAvailable) {
+      return `
+        <div class="doc-item-card">
+          <div class="doc-item-header">
+            <span class="dih-title">${d.label}</span>
+            <span class="legend-item missing">Tidak Dilampirkan</span>
+          </div>
+          <div class="doc-missing-placeholder">
+            <span>Berkas belum diunggah oleh pemohon</span>
+          </div>
+        </div>`;
+    }
+
+    const isPdf = url.toLowerCase().includes('.pdf');
+    const safeUrl = escKey(url);
+    const rotation = docRotations[d.key] || 0;
+
+    return `
+      <div class="doc-item-card">
+        <div class="doc-item-header">
+          <span class="dih-title">${d.label}</span>
+          <span class="legend-item available">Tersedia</span>
+        </div>
+        <div class="doc-stage-area">
+          ${isPdf ? `
+            <div style="text-align:center;color:var(--text-secondary)">
+              <div style="font-size:12px;margin-bottom:8px">Dokumen Berformat PDF</div>
+              <a href="${url}" target="_blank" rel="noopener" class="primary-btn compact">Buka Dokumen PDF</a>
+            </div>
+          ` : `
+            <img class="doc-preview-img" id="docImg_${idx}" src="${url}" alt="${d.label}" loading="lazy"
+              style="transform: rotate(${rotation}deg)"
+              onclick="openLightbox('${safeUrl}', '${escKey(d.label)}')">
+            <div class="doc-action-overlay">
+              <button class="doc-tool-pill" onclick="rotateCardDoc('${d.key}', 'docImg_${idx}', 90)">Putar 90°</button>
+              <button class="doc-tool-pill" onclick="openLightbox('${safeUrl}', '${escKey(d.label)}')">Perbesar</button>
+            </div>
+          `}
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function rotateCardDoc(key, imgId, delta) {
+  docRotations[key] = (docRotations[key] || 0) + delta;
+  const img = document.getElementById(imgId);
+  if (img) img.style.transform = `rotate(${docRotations[key]}deg)`;
+}
+
+// ── Lightbox & Inspector Controls ────────────────────────────────
+function openLightbox(url, title = 'Dokumen Lampiran') {
+  currentLightboxRotation = 0;
+  $('lightboxTitle').textContent = title;
+  const img = $('lightbox-img');
+  img.src = url;
+  img.style.transform = 'rotate(0deg)';
+  $('lightboxDownloadBtn').href = url;
+  $('lightbox').classList.add('show');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeLightbox() {
+  $('lightbox').classList.remove('show');
+  document.body.style.overflow = '';
+}
+
+function rotateLightboxDoc(delta) {
+  currentLightboxRotation += delta;
+  const img = $('lightbox-img');
+  if (img) img.style.transform = `rotate(${currentLightboxRotation}deg)`;
+}
+
+function resetLightboxZoom() {
+  currentLightboxRotation = 0;
+  const img = $('lightbox-img');
+  if (img) img.style.transform = 'rotate(0deg)';
+}
+
+// ── Status Decision Handling ─────────────────────────────────────
 function selectStatus(el) {
-  if (el.classList.contains('locked')) return;
-  $$('.status-opt').forEach(o => {
-    const locked = o.classList.contains('locked');
-    o.className = 'status-opt' + (locked ? ' locked' : '');
+  $$('.status-card-opt').forEach(o => {
+    o.classList.remove('selected-wait', 'selected-conf', 'selected-done');
     o.setAttribute('aria-checked', 'false');
   });
+
   const v = el.dataset.val;
   el.classList.add(v === 'Menunggu' ? 'selected-wait' : v === 'Dikonfirmasi' ? 'selected-conf' : 'selected-done');
   el.setAttribute('aria-checked', 'true');
@@ -1050,27 +1410,78 @@ function selectStatus(el) {
   if (v === 'Selesai') {
     populateFotoUlangSelects();
     if (!currentRow || !currentRow.foto_ulang_tanggal) setFotoUlangValue('');
-    fuSection.style.display = 'block';
+    if (fuSection) fuSection.style.display = 'block';
   } else {
-    fuSection.style.display = 'none';
+    if (fuSection) fuSection.style.display = 'none';
   }
 }
 
-// ── Save Status ──────────────────────────────────────────────────
+function populateFotoUlangSelects() {
+  const hSel = $('fuHari'), bSel = $('fuBulan'), ySel = $('fuTahun');
+  if (!hSel || hSel.dataset.filled) return;
+
+  for (let d = 1; d <= 31; d++) {
+    const o = document.createElement('option');
+    o.value = String(d).padStart(2, '0');
+    o.textContent = d;
+    hSel.appendChild(o);
+  }
+
+  MONTH_FULL.forEach((m, i) => {
+    const o = document.createElement('option');
+    o.value = String(i + 1).padStart(2, '0');
+    o.textContent = m;
+    bSel.appendChild(o);
+  });
+
+  const thisYear = new Date().getFullYear();
+  for (let y = thisYear; y <= thisYear + 1; y++) {
+    const o = document.createElement('option');
+    o.value = String(y);
+    o.textContent = y;
+    ySel.appendChild(o);
+  }
+  hSel.dataset.filled = '1';
+}
+
+function setFotoUlangValue(tglStr) {
+  populateFotoUlangSelects();
+  const s = String(tglStr || '').slice(0, 10);
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if ($('fuTahun')) $('fuTahun').value = m ? m[1] : '';
+  if ($('fuBulan')) $('fuBulan').value = m ? m[2] : '';
+  if ($('fuHari')) $('fuHari').value = m ? m[3] : '';
+}
+
+function getFotoUlangValue() {
+  const h = $('fuHari')?.value, b = $('fuBulan')?.value, y = $('fuTahun')?.value;
+  if (!h || !b || !y) return '';
+  return `${y}-${b}-${h}`;
+}
+
+function formatFotoUlangReadable(tglStr) {
+  const s = String(tglStr || '').slice(0, 10);
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return 'Belum ada';
+  return `${parseInt(m[3])} ${MONTH_FULL[parseInt(m[2]) - 1]} ${m[1]}`;
+}
+
 async function saveStatus() {
   if (!currentRow) return;
-  const sel = document.querySelector('.status-opt[class*="selected"]');
-  if (!sel) { showToast('error', 'Pilih status terlebih dahulu'); return; }
+  const sel = document.querySelector('.status-card-opt[class*="selected"]');
+  if (!sel) {
+    showToast('error', 'Pilih status keputusan terlebih dahulu');
+    return;
+  }
 
   const newStatus = sel.dataset.val;
   const note = $('m-note').value.trim();
 
   let fotoUlangTanggal = '';
   if (newStatus === 'Selesai') {
-    // Always require foto ulang date when setting to Selesai
     fotoUlangTanggal = getFotoUlangValue();
     if (!fotoUlangTanggal) {
-      showToast('error', '⚠ Pilih tanggal foto ulang paspor sebelum menyimpan');
+      showToast('error', 'Pilih tanggal foto ulang paspor sebelum menyimpan status Selesai');
       return;
     }
   }
@@ -1079,19 +1490,21 @@ async function saveStatus() {
   const rowIndex = currentRow._rowIndex;
   const rowInData = allData.find(r => r._key === rowKey);
 
-  // Optimistic update
   if (rowInData) {
     rowInData.status = newStatus;
     rowInData.note = note;
     if (newStatus === 'Selesai') rowInData.foto_ulang_tanggal = fotoUlangTanggal;
   }
+
   localStatus[rowKey] = { status: newStatus, note, foto_ulang_tanggal: fotoUlangTanggal };
   saveLocalStatus();
+  logActivity('Pembaruan Status BAP', `Mengubah status ${currentRow.nama} menjadi ${newStatus}.`);
+  playSuccessChime();
   renderAll();
   closeModal();
 
   if (rowIndex) {
-    showToast('info', '⏳ Menyimpan ke sheet...');
+    showToast('info', 'Menyimpan status ke lembar kerja...');
     try {
       const payload = { action: 'updateStatus', _rowIndex: rowIndex, status: newStatus, note };
       if (newStatus === 'Selesai') payload.foto_ulang_tanggal = fotoUlangTanggal;
@@ -1103,25 +1516,191 @@ async function saveStatus() {
       });
       const json = await res.json();
       if (json.ok) {
-        showToast('success', `✓ Status "${newStatus}" berhasil disimpan`);
+        showToast('success', `Status "${newStatus}" berhasil disimpan ke server`);
         delete localStatus[rowKey];
         saveLocalStatus();
       } else {
-        showToast('error', '⚠ Gagal simpan ke sheet — tersimpan lokal');
+        showToast('error', 'Gagal simpan ke lembar kerja (tersimpan secara lokal)');
       }
     } catch {
-      showToast('error', '⚠ Gagal terhubung — tersimpan lokal');
+      showToast('error', 'Koneksi gagal (status disimpan secara lokal)');
     }
   } else {
-    showToast('success', `✓ Status: ${newStatus} (tersimpan lokal)`);
+    showToast('success', `Status "${newStatus}" tersimpan lokal`);
   }
 }
 
-// ── Delete ───────────────────────────────────────────────────────
+// ── WhatsApp Official Template Generator ─────────────────────────
+function applyWATemplate(type, btnEl) {
+  if (btnEl) {
+    $$('.wa-preset-btn').forEach(b => b.classList.remove('active'));
+    btnEl.classList.add('active');
+  }
+
+  if (!currentRow) return;
+  const r = currentRow;
+  const editor = $('waMessageEditor');
+  if (!editor) return;
+
+  let msg = '';
+  const nama = r.nama || 'Bapak/Ibu';
+  const reg = r.reg || 'BAP-0000';
+  const tgl = formatTglFull(r.tanggal);
+  const jam = r.jam || 'Sesi Ditentukan';
+  const jenis = r.jenis_permohonan || 'BAP Paspor';
+
+  if (type === 'konfirmasi') {
+    msg = 
+`*PEMBERITAHUAN JADWAL BAP KANTOR IMIGRASI KELAS I TPI TANJUNGPINANG*
+
+Yth. Bapak/Ibu *${nama}*,
+
+Pendaftaran Berita Acara Pemeriksaan (BAP) Paspor Anda telah kami verifikasi dan disetujui.
+
+*Rincian Kedatangan:*
+• No. Registrasi: *${reg}*
+• Jenis Permohonan: *${jenis}*
+• Hari/Tanggal: *${tgl}*
+• Sesi Waktu: *${jam} WIB*
+• Lokasi: Seksi INTELDAKIM, Kantor Imigrasi Kelas I TPI Tanjungpinang
+
+*Instruksi Penting:*
+1. Harap hadir 15 menit sebelum waktu sesi.
+2. Wajib membawa seluruh *dokumen fisik asli* (KTP, KK, Akta Lahir/Buku Nikah/Ijazah, Surat Polisi jika paspor hilang).
+3. Berpakaian rapi dan berkerah (bukan kaos oblong).
+
+Terima kasih.
+_Seksi Intelijen dan Penindakan Keimigrasian_`;
+
+  } else if (type === 'h1') {
+    msg = 
+`*PENGINGAT KEHADIRAN BAP (H-1)*
+
+Yth. Bapak/Ibu *${nama}*,
+
+Mengingatkan kembali jadwal pelaksanaan Berita Acara Pemeriksaan (BAP) Paspor Anda besok:
+• No. Registrasi: *${reg}*
+• Jadwal: *${tgl}*
+• Sesi: *${jam} WIB*
+
+Pastikan seluruh berkas persyaratan asli telah lengkap. Jika berhalangan hadir, segera hubungi petugas kami.
+
+Terima kasih.
+_Kantor Imigrasi Kelas I TPI Tanjungpinang_`;
+
+  } else if (type === 'berkas_kurang') {
+    msg = 
+`*KLARIFIKASI DOKUMEN BAP ONLINE*
+
+Yth. Bapak/Ibu *${nama}*,
+
+Sehubungan dengan pendaftaran BAP No. *${reg}*, terdapat dokumen yang perlu dilengkapi atau diperjelas sebelum pelaksanaan wawancara.
+
+Mohon konfirmasi kelengkapan berkas fisik yang akan dibawa saat verifikasi loket.
+
+Terima kasih.
+_Petugas Pemeriksa INTELDAKIM Tanjungpinang_`;
+
+  } else if (type === 'selesai') {
+    const fuTgl = formatFotoUlangReadable(r.foto_ulang_tanggal);
+    msg = 
+`*INFORMASI PENYELESAIAN BAP & JADWAL FOTO PASPOR*
+
+Yth. Bapak/Ibu *${nama}*,
+
+Proses Berita Acara Pemeriksaan (BAP) Paspor No. *${reg}* telah *SELESAI* dilaksanakan.
+
+*Jadwal Tahap Foto & Biometrik Paspor Baru:*
+• Tanggal: *${fuTgl}*
+• Tempat: Loket Foto Pelayanan Paspor Kantor Imigrasi Kelas I TPI Tanjungpinang
+
+Bawa berkas tanda bukti BAP saat hadir ke loket foto.
+
+Terima kasih.
+_Kantor Imigrasi Kelas I TPI Tanjungpinang_`;
+  }
+
+  editor.value = msg;
+}
+
+function copyWAMessage() {
+  const text = $('waMessageEditor')?.value || '';
+  if (!text) return;
+  navigator.clipboard.writeText(text).then(() => {
+    playSuccessChime();
+    showToast('success', 'Teks pesan WhatsApp berhasil disalin');
+  });
+}
+
+function sendDirectWAMessage() {
+  if (!currentRow || !currentRow.hp) {
+    showToast('error', 'Nomor telepon pemohon tidak valid');
+    return;
+  }
+  const text = $('waMessageEditor')?.value || '';
+  const clean = String(currentRow.hp).replace(/\D/g, '');
+  const intl = clean.startsWith('0') ? '62' + clean.slice(1) : clean;
+  const url = `https://wa.me/${intl}?text=${encodeURIComponent(text)}`;
+  logActivity('Kirim Pesan WhatsApp', `Mengirim template pesan ke ${currentRow.nama} (${currentRow.hp}).`);
+  window.open(url, '_blank');
+}
+
+function openDirectWAFromModal() {
+  if (!currentRow || !currentRow.hp) return;
+  openWA(currentRow.hp);
+}
+
+// ── Reschedule Modal Details ─────────────────────────────────────
+function renderRescheduleDetail(row) {
+  const panel = $('rsDetailPanel');
+  if (!panel) return;
+
+  const isApproved = row.reschedule_status === 'Disetujui';
+  const isRejected = row.reschedule_status === 'Ditolak';
+
+  panel.innerHTML = `
+    <div class="data-group-card full-span">
+      <div class="dgc-title">Pengajuan Perubahan Jadwal Kedatangan</div>
+      <div class="field-grid-three">
+        <div class="field-item">
+          <span class="fi-label">Jadwal Semula</span>
+          <span class="fi-value">${formatTglFull(row.tanggal)} (Sesi: ${escHtml(row.jam)})</span>
+        </div>
+        <div class="field-item">
+          <span class="fi-label">Jadwal Baru Dimohonkan</span>
+          <span class="fi-value schedule-tag">${formatTglFull(row.reschedule_tanggal)} (Sesi: ${escHtml(row.reschedule_jam)})</span>
+        </div>
+        <div class="field-item">
+          <span class="fi-label">Status Pengajuan</span>
+          <span class="fi-value">${rsBadgeHtml(row.reschedule_status)}</span>
+        </div>
+        <div class="field-item full-span">
+          <span class="fi-label">Alasan Perubahan Jadwal</span>
+          <span class="fi-value text-block">${escHtml(row.reschedule_alasan) || 'Tidak disertakan alasan.'}</span>
+        </div>
+      </div>
+      ${row.reschedule_status === 'Pending' ? `
+        <div style="margin-top:14px;display:flex;gap:10px;">
+          <button class="primary-btn" onclick="approveReschedule('${escKey(row._key)}');closeModal();">Setujui Jadwal Baru</button>
+          <button class="tbl-action-btn danger" onclick="rejectReschedule('${escKey(row._key)}');closeModal();">Tolak Permohonan</button>
+        </div>
+      ` : isApproved ? `
+        <div style="margin-top:12px;padding:8px 12px;background:rgba(34,197,94,0.08);border-radius:6px;font-size:11.5px;color:var(--green-400);font-weight:700;">
+          Pengajuan perubahan jadwal ini telah disetujui petugas.
+        </div>
+      ` : isRejected ? `
+        <div style="margin-top:12px;padding:8px 12px;background:rgba(239,68,68,0.08);border-radius:6px;font-size:11.5px;color:var(--red-400);font-weight:700;">
+          Pengajuan perubahan jadwal ini telah ditolak. Jadwal lama tetap berlaku.
+        </div>
+      ` : ''}
+    </div>`;
+}
+
+// ── Delete Actions ───────────────────────────────────────────────
 function confirmDelete() {
   if (!currentRow) return;
   pendingDelKey = currentRow._key;
-  $('deleteName').textContent = currentRow.nama || '—';
+  $('deleteName').textContent = currentRow.nama || 'Pemohon';
   closeModal();
   $('deleteOverlay').classList.add('show');
   document.body.style.overflow = 'hidden';
@@ -1131,7 +1710,7 @@ function openDeleteFromTable(key) {
   const row = allData.find(r => r._key === key);
   if (!row) return;
   pendingDelKey = key;
-  $('deleteName').textContent = row.nama || '—';
+  $('deleteName').textContent = row.nama || 'Pemohon';
   $('deleteOverlay').classList.add('show');
   document.body.style.overflow = 'hidden';
 }
@@ -1152,7 +1731,9 @@ async function executeDelete() {
   saveLocalStatus();
   closeDeleteModal();
   renderAll();
-  showToast('info', '⏳ Menghapus data...');
+
+  logActivity('Penghapusan Data', `Menghapus pendaftar ${row.nama} (${row.reg}).`);
+  showToast('info', 'Menghapus data pemohon...');
 
   if (row._rowIndex) {
     try {
@@ -1162,211 +1743,389 @@ async function executeDelete() {
         body: JSON.stringify({ action: 'deleteRow', _rowIndex: row._rowIndex })
       });
       const json = await res.json();
-      if (json.ok) showToast('success', '✓ Data berhasil dihapus');
-      else showToast('error', '⚠ Gagal hapus di sheet');
+      if (json.ok) {
+        showToast('success', 'Data pemohon berhasil dihapus');
+      } else {
+        showToast('error', 'Gagal menghapus baris di Google Sheets');
+      }
     } catch {
-      showToast('error', '⚠ Gagal menghapus data');
+      showToast('error', 'Gagal menghubungi server untuk menghapus');
     }
   } else {
-    showToast('success', '✓ Data dihapus');
+    showToast('success', 'Data berhasil dihapus dari sistem lokal');
   }
   pendingDelKey = null;
 }
 
-// ── Print ────────────────────────────────────────────────────────
+// ── Print Official Document View ─────────────────────────────────
 function printDetail() {
   if (!currentRow) return;
   const r = currentRow;
-  const w = window.open('', '_blank', 'width=700,height=900');
+  const w = window.open('', '_blank', 'width=780,height=900');
   w.document.write(`<!DOCTYPE html>
-<html lang="id"><head><meta charset="UTF-8">
-<title>Detail BAP — ${r.nama || '—'}</title>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<title>Lembar Pemeriksaan BAP - ${escHtml(r.nama)}</title>
 <style>
-  body{font-family:'DM Sans',Arial,sans-serif;margin:32px;color:#111;font-size:13px;}
-  h1{font-size:16px;margin-bottom:4px;border-bottom:2px solid #0ea5e9;padding-bottom:8px;color:#0369a1;}
-  .sub{color:#666;font-size:11px;margin-bottom:20px;}
-  table{width:100%;border-collapse:collapse;margin-bottom:16px;}
-  th{background:#f0f4f8;padding:8px 12px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:#5a7999;border-bottom:1px solid #dde;}
-  td{padding:9px 12px;border-bottom:1px solid #eef;vertical-align:top;}
-  td:first-child{font-size:10px;font-weight:700;color:#5a7999;text-transform:uppercase;letter-spacing:.07em;width:40%;}
-  .badge{display:inline-block;padding:2px 10px;border-radius:99px;font-size:10px;font-weight:700;}
-  .badge-wait{background:#fef9c3;color:#854d0e;}.badge-conf{background:#dbeafe;color:#1e40af;}.badge-done{background:#dcfce7;color:#166534;}
-  .footer{margin-top:28px;font-size:10px;color:#999;border-top:1px solid #eee;padding-top:12px;}
-  @media print{body{margin:0;padding:16px;}}
-</style></head><body>
-<h1>Detail BAP Pemohon — ${r.nama || '—'}</h1>
-<div class="sub">Dicetak pada: ${new Date().toLocaleString('id-ID')} · Admin BAP Online Imigrasi Tanjungpinang</div>
+  body { font-family: 'Plus Jakarta Sans', Arial, sans-serif; margin: 36px; color: #0f172a; font-size: 13px; line-height: 1.5; }
+  .gov-head { text-align: center; border-bottom: 2px solid #0f172a; padding-bottom: 12px; margin-bottom: 20px; }
+  .gov-head h2 { font-size: 14px; margin: 0; text-transform: uppercase; letter-spacing: 0.05em; }
+  .gov-head h1 { font-size: 16px; margin: 4px 0; text-transform: uppercase; }
+  .gov-head p { font-size: 11px; margin: 0; color: #475569; }
+  .doc-title { text-align: center; font-size: 14px; font-weight: 800; text-transform: uppercase; margin: 18px 0; letter-spacing: 0.06em; }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 18px; }
+  th { background: #f1f5f9; padding: 7px 10px; text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid #cbd5e1; }
+  td { padding: 8px 10px; border-bottom: 1px solid #e2e8f0; font-size: 12px; }
+  td:first-child { width: 35%; font-weight: 700; color: #475569; }
+  .footer-sig { display: flex; justify-content: space-between; margin-top: 40px; }
+  .sig-block { text-align: center; width: 220px; }
+  .sig-space { height: 70px; }
+  @media print { body { margin: 15px; } }
+</style>
+</head>
+<body>
+<div class="gov-head">
+  <h2>Kementerian Hukum dan Hak Asasi Manusia RI</h2>
+  <h2>Direktorat Jenderal Imigrasi</h2>
+  <h1>Kantor Imigrasi Kelas I TPI Tanjungpinang</h1>
+  <p>Seksi Intelijen dan Penindakan Keimigrasian (INTELDAKIM)</p>
+</div>
+<div class="doc-title">Lembar Registrasi Berita Acara Pemeriksaan (BAP) Paspor</div>
 <table>
-  <thead><tr><th colspan="2">Informasi Pribadi</th></tr></thead>
+  <thead><tr><th colspan="2">Data Identitas Pemohon</th></tr></thead>
   <tbody>
-    <tr><td>No. Registrasi</td><td>${r.reg || '—'}</td></tr>
-    <tr><td>Nama Lengkap</td><td><strong>${r.nama || '—'}</strong></td></tr>
-    <tr><td>Tempat/Tgl Lahir</td><td>${r.ttl || '—'}</td></tr>
-    <tr><td>Jenis Kelamin</td><td>${r.jk || '—'}</td></tr>
-    <tr><td>No. HP/WhatsApp</td><td>${r.hp || '—'}</td></tr>
-    <tr><td>Waktu Daftar</td><td>${r.waktu_daftar || '—'}</td></tr>
+    <tr><td>No. Registrasi BAP</td><td><strong>${escHtml(r.reg)}</strong></td></tr>
+    <tr><td>Nama Lengkap Sesuai KTP</td><td><strong>${escHtml(r.nama)}</strong></td></tr>
+    <tr><td>Tempat / Tanggal Lahir</td><td>${escHtml(r.ttl)}</td></tr>
+    <tr><td>Jenis Kelamin</td><td>${escHtml(r.jk)}</td></tr>
+    <tr><td>Nomor WhatsApp / HP</td><td>${escHtml(r.hp)}</td></tr>
+    <tr><td>Waktu Pendaftaran</td><td>${escHtml(r.waktu_daftar)}</td></tr>
   </tbody>
 </table>
 <table>
-  <thead><tr><th colspan="2">Informasi BAP</th></tr></thead>
+  <thead><tr><th colspan="2">Informasi Permohonan BAP</th></tr></thead>
   <tbody>
-    <tr><td>Jenis Permohonan</td><td>${r.jenis_permohonan || '—'}</td></tr>
-    <tr><td>Jenis Paspor</td><td>${r.jenis_paspor || '—'}</td></tr>
-    <tr><td>Tujuan</td><td>${r.tujuan || '—'}</td></tr>
-    <tr><td>Jadwal Kedatangan</td><td>${formatTglFull(r.tanggal)} · ${r.jam || '—'}</td></tr>
-    <tr><td>Status BAP</td><td>${r.status || '—'}</td></tr>
-    ${r.foto_ulang_tanggal ? `<tr><td>Foto Ulang Paspor</td><td>${formatFotoUlangReadable(r.foto_ulang_tanggal)}</td></tr>` : ''}
-    ${r.note ? `<tr><td>Catatan Petugas</td><td>${r.note}</td></tr>` : ''}
+    <tr><td>Jenis Permohonan</td><td>${escHtml(r.jenis_permohonan)}</td></tr>
+    <tr><td>Jenis Paspor</td><td>${escHtml(r.jenis_paspor)}</td></tr>
+    <tr><td>Tujuan Permohonan</td><td>${escHtml(r.tujuan)}</td></tr>
+    <tr><td>Jadwal Pemeriksaan</td><td>${formatTglFull(r.tanggal)} (Sesi: ${escHtml(r.jam)})</td></tr>
+    <tr><td>Status Saat Ini</td><td><strong>${escHtml(r.status)}</strong></td></tr>
+    ${r.foto_ulang_tanggal ? `<tr><td>Jadwal Foto Ulang Paspor</td><td>${formatFotoUlangReadable(r.foto_ulang_tanggal)}</td></tr>` : ''}
+    ${r.note ? `<tr><td>Catatan Petugas Pemeriksa</td><td>${escHtml(r.note)}</td></tr>` : ''}
   </tbody>
 </table>
-${r.reschedule_status ? `<table>
-  <thead><tr><th colspan="2">Reschedule</th></tr></thead>
-  <tbody>
-    <tr><td>Status Reschedule</td><td>${r.reschedule_status}</td></tr>
-    <tr><td>Jadwal Baru</td><td>${formatTglFull(r.reschedule_tanggal)} · ${r.reschedule_jam || '—'}</td></tr>
-    <tr><td>Alasan</td><td>${r.reschedule_alasan || '—'}</td></tr>
-  </tbody>
-</table>` : ''}
-<div class="footer">Dokumen ini dicetak dari Sistem Admin BAP Online — Kantor Imigrasi Kelas I TPI Tanjungpinang</div>
-</body></html>`);
+<div class="footer-sig">
+  <div class="sig-block">
+    <p>Pemohon,</p>
+    <div class="sig-space"></div>
+    <p>( ${escHtml(r.nama)} )</p>
+  </div>
+  <div class="sig-block">
+    <p>Tanjungpinang, ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}<br>Petugas Pemeriksa INTELDAKIM,</p>
+    <div class="sig-space"></div>
+    <p>( ..................................................... )</p>
+  </div>
+</div>
+</body>
+</html>`);
   w.document.close();
-  setTimeout(() => w.print(), 500);
+  setTimeout(() => w.print(), 400);
 }
 
-// ── Lightbox ─────────────────────────────────────────────────────
-function openLightbox(url, label) {
-  $('lightbox-img').src = url;
-  $('lightbox-img').alt = label;
-  $('lightbox').classList.add('show');
-  document.body.style.overflow = 'hidden';
-}
-function closeLightbox() {
-  $('lightbox').classList.remove('show');
-  document.body.style.overflow = '';
-}
-
-// ── Rekap Page ───────────────────────────────────────────────────
+// ── Rekapitulasi & Statistik View ────────────────────────────────
 function renderRecap() {
   const total = allData.length || 1;
 
   const statusData = [
-    { label: 'Menunggu', count: allData.filter(r => r.status === 'Menunggu').length, color: '#fcd34d' },
-    { label: 'Dikonfirmasi', count: allData.filter(r => r.status === 'Dikonfirmasi').length, color: '#93c5fd' },
-    { label: 'Selesai', count: allData.filter(r => r.status === 'Selesai').length, color: '#86efac' },
-    { label: 'Pending RS', count: allData.filter(r => r.reschedule_status === 'Pending').length, color: '#fdba74' },
+    { label: 'Menunggu', count: allData.filter(r => r.status === 'Menunggu').length, color: '#f59e0b' },
+    { label: 'Dikonfirmasi', count: allData.filter(r => r.status === 'Dikonfirmasi').length, color: '#0284c7' },
+    { label: 'Selesai', count: allData.filter(r => r.status === 'Selesai').length, color: '#16a34a' },
+    { label: 'Pending Reschedule', count: allData.filter(r => r.reschedule_status === 'Pending').length, color: '#ea580c' },
   ];
 
-  $('statusBars').innerHTML = statusData.map(s => `
-    <div class="recap-row">
-      <span class="recap-key"><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${s.color};margin-right:7px;"></span>${s.label}</span>
-      <span class="recap-val">${s.count}</span>
-    </div>
-    <div class="recap-bar">
-      <div class="recap-bar-fill" style="width:${Math.round(s.count / total * 100)}%;background:${s.color}"></div>
-    </div>`).join('');
+  const statusBars = $('statusBars');
+  if (statusBars) {
+    statusBars.innerHTML = statusData.map(s => `
+      <div>
+        <div class="recap-metric-row">
+          <span class="rmr-label"><span class="rmr-color-dot" style="background:${s.color}"></span>${s.label}</span>
+          <span class="rmr-value">${s.count} pemohon (${Math.round(s.count / total * 100)}%)</span>
+        </div>
+        <div class="recap-progress-track">
+          <div class="recap-progress-fill" style="width:${Math.round(s.count / total * 100)}%;background:${s.color}"></div>
+        </div>
+      </div>
+    `).join('');
+  }
 
   const jenisMap = {};
-  allData.forEach(r => { const j = r.jenis_permohonan || 'Lainnya'; jenisMap[j] = (jenisMap[j] || 0) + 1; });
-  const jColors = ['#38bdf8', '#60a5fa', '#86efac', '#f472b6', '#a78bfa', '#fbbf24'];
-  $('jenisBars').innerHTML = Object.entries(jenisMap)
-    .sort((a, b) => b[1] - a[1])
-    .map(([k, v], i) => `
-      <div class="recap-row">
-        <span class="recap-key" style="font-size:11.5px"><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${jColors[i % jColors.length]};margin-right:7px;"></span>${k.replace('BAP ', '')}</span>
-        <span class="recap-val">${v}</span>
-      </div>
-      <div class="recap-bar">
-        <div class="recap-bar-fill" style="width:${Math.round(v / total * 100)}%;background:${jColors[i % jColors.length]}"></div>
-      </div>`).join('');
+  allData.forEach(r => {
+    const j = r.jenis_permohonan || 'Lainnya';
+    jenisMap[j] = (jenisMap[j] || 0) + 1;
+  });
+  const jColors = ['#0284c7', '#0ea5e9', '#16a34a', '#d97706', '#8b5cf6'];
+  const jenisBars = $('jenisBars');
+  if (jenisBars) {
+    jenisBars.innerHTML = Object.entries(jenisMap)
+      .sort((a, b) => b[1] - a[1])
+      .map(([k, v], i) => `
+        <div>
+          <div class="recap-metric-row">
+            <span class="rmr-label"><span class="rmr-color-dot" style="background:${jColors[i % jColors.length]}"></span>${k}</span>
+            <span class="rmr-value">${v} pemohon (${Math.round(v / total * 100)}%)</span>
+          </div>
+          <div class="recap-progress-track">
+            <div class="recap-progress-fill" style="width:${Math.round(v / total * 100)}%;background:${jColors[i % jColors.length]}"></div>
+          </div>
+        </div>
+      `).join('');
+  }
 
   const sesiMap = {};
-  allData.forEach(r => { const s = r.jam || '—'; sesiMap[s] = (sesiMap[s] || 0) + 1; });
+  allData.forEach(r => {
+    const s = r.jam || 'Belum Ditentukan';
+    sesiMap[s] = (sesiMap[s] || 0) + 1;
+  });
 
-  $('sesiTable').innerHTML = `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">
-    <thead><tr style="background:rgba(14,165,233,0.04)">
-      <th style="padding:10px 14px;font-size:8.5px;font-weight:800;color:var(--text3);text-align:left;letter-spacing:.12em;text-transform:uppercase;border-bottom:1px solid var(--border)">Sesi</th>
-      <th style="padding:10px 14px;font-size:8.5px;font-weight:800;color:var(--text3);text-align:left;letter-spacing:.12em;text-transform:uppercase;border-bottom:1px solid var(--border)">Jumlah</th>
-      <th style="padding:10px 14px;font-size:8.5px;font-weight:800;color:var(--text3);text-align:left;letter-spacing:.12em;text-transform:uppercase;border-bottom:1px solid var(--border)">Persentase</th>
-    </tr></thead>
-    <tbody>
-      ${Object.entries(sesiMap).sort().map(([k, v]) => `
-        <tr>
-          <td style="padding:10px 14px;font-size:12.5px;font-weight:600">${k}</td>
-          <td style="padding:10px 14px;font-size:12.5px;color:var(--sky-400);font-weight:700">${v} orang</td>
-          <td style="padding:10px 14px;font-size:12.5px;color:var(--text2)">${Math.round(v / allData.length * 100)}%</td>
-        </tr>`).join('')}
-      <tr style="border-top:2px solid var(--border2);background:rgba(14,165,233,0.04)">
-        <td style="padding:10px 14px;font-size:13px;font-weight:800;font-family:'Cinzel',serif;color:var(--sky-400)">TOTAL</td>
-        <td style="padding:10px 14px;font-size:13px;font-weight:900;color:var(--sky-400)">${allData.length} orang</td>
-        <td style="padding:10px 14px;font-size:13px;font-weight:700">100%</td>
-      </tr>
-    </tbody>
-  </table></div>`;
+  const sesiTable = $('sesiTable');
+  if (sesiTable) {
+    sesiTable.innerHTML = `
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Waktu Sesi Pelayanan</th>
+            <th>Beban Jumlah Pemohon</th>
+            <th>Persentase Antrean</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${Object.entries(sesiMap).sort().map(([k, v]) => `
+            <tr>
+              <td><strong>${k}</strong></td>
+              <td style="color:var(--sky-400);font-weight:700;">${v} orang</td>
+              <td>${Math.round(v / allData.length * 100)}%</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>`;
+  }
 }
 
-// ── Export Excel ─────────────────────────────────────────────────
-function exportExcel() {
-  if (!window.XLSX) { showToast('error', 'Library XLSX tidak tersedia'); return; }
-  const filtered = getFiltered();
-  if (!filtered.length) { showToast('error', 'Tidak ada data untuk diekspor'); return; }
+// ── Export to Excel ──────────────────────────────────────────────
+function exportExcel(onlySelected = false) {
+  if (!window.XLSX) {
+    showToast('error', 'Library Excel (XLSX) tidak tersedia');
+    return;
+  }
 
-  let filterLabel = '';
-  if (activeMonth !== 'all') filterLabel += MONTH_SHORT[parseInt(activeMonth) - 1];
-  if (activeYear) filterLabel += (filterLabel ? '_' : '') + activeYear;
-  if (!filterLabel) filterLabel = 'Semua';
+  let sourceData = getFiltered();
+  if (onlySelected) {
+    sourceData = sourceData.filter(r => selectedRowKeys.has(r._key));
+  }
+
+  if (!sourceData.length) {
+    showToast('error', 'Tidak ada data untuk diekspor ke Excel');
+    return;
+  }
 
   const wb = XLSX.utils.book_new();
-  const rows = filtered.map((r, i) => ({
-    'No': i + 1, 'No. Registrasi': r.reg || '', 'Nama': r.nama || '',
-    'TTL': r.ttl || '', 'JK': r.jk || '', 'No. HP': r.hp || '',
-    'Jenis BAP': r.jenis_permohonan || '', 'Jenis Paspor': r.jenis_paspor || '',
-    'Tujuan': r.tujuan || '', 'Tanggal': r.tanggal || '', 'Sesi': r.jam || '',
-    'Status': r.status || '', 'RS Status': r.reschedule_status || '',
-    'RS Tanggal': r.reschedule_tanggal || '', 'RS Jam': r.reschedule_jam || '',
-    'RS Alasan': r.reschedule_alasan || '', 'Catatan': r.note || '',
-    'Waktu Daftar': r.waktu_daftar || '',
+  const rows = sourceData.map((r, i) => ({
+    'No': i + 1,
+    'No. Registrasi': r.reg || '',
+    'Nama Lengkap': r.nama || '',
+    'Tempat/Tgl Lahir': r.ttl || '',
+    'Jenis Kelamin': r.jk || '',
+    'Nomor WhatsApp': r.hp || '',
+    'Kategori BAP': r.jenis_permohonan || '',
+    'Jenis Paspor': r.jenis_paspor || '',
+    'Tujuan Permohonan': r.tujuan || '',
+    'Jadwal BAP': r.tanggal || '',
+    'Sesi Kedatangan': r.jam || '',
+    'Status BAP': r.status || '',
+    'Status Reschedule': r.reschedule_status || '',
+    'Tgl Reschedule': r.reschedule_tanggal || '',
+    'Jam Reschedule': r.reschedule_jam || '',
+    'Alasan Reschedule': r.reschedule_alasan || '',
+    'Tgl Foto Ulang': r.foto_ulang_tanggal || '',
+    'Catatan Petugas': r.note || '',
+    'Waktu Registrasi': r.waktu_daftar || '',
   }));
 
   const ws = XLSX.utils.json_to_sheet(rows);
   ws['!cols'] = [
-    { wch: 4 }, { wch: 15 }, { wch: 28 }, { wch: 20 }, { wch: 5 }, { wch: 16 },
-    { wch: 18 }, { wch: 16 }, { wch: 28 }, { wch: 13 }, { wch: 12 }, { wch: 14 },
-    { wch: 12 }, { wch: 13 }, { wch: 12 }, { wch: 32 }, { wch: 28 }, { wch: 20 }
+    { wch: 4 }, { wch: 18 }, { wch: 28 }, { wch: 22 }, { wch: 6 }, { wch: 16 },
+    { wch: 20 }, { wch: 16 }, { wch: 28 }, { wch: 13 }, { wch: 14 }, { wch: 14 },
+    { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 30 }, { wch: 14 }, { wch: 28 }, { wch: 20 }
   ];
-  XLSX.utils.book_append_sheet(wb, ws, ('Data ' + filterLabel).slice(0, 31));
-
-  const ws2 = XLSX.utils.json_to_sheet([
-    { Status: 'Menunggu', Jumlah: filtered.filter(r => r.status === 'Menunggu').length },
-    { Status: 'Dikonfirmasi', Jumlah: filtered.filter(r => r.status === 'Dikonfirmasi').length },
-    { Status: 'Selesai', Jumlah: filtered.filter(r => r.status === 'Selesai').length },
-    { Status: 'TOTAL', Jumlah: filtered.length },
-  ]);
-  XLSX.utils.book_append_sheet(wb, ws2, 'Rekap Status');
+  XLSX.utils.book_append_sheet(wb, ws, 'Data BAP');
 
   const now = new Date();
-  const datePart = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
-  const fileName = `Rekap_BAP_${filterLabel}_${datePart}.xlsx`;
+  const dateStr = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
+  const fileName = `Rekap_BAP_INTELDAKIM_${dateStr}.xlsx`;
   XLSX.writeFile(wb, fileName);
-  showToast('success', `✓ Export "${fileName}" berhasil`);
+
+  playSuccessChime();
+  showToast('success', `Ekspor berhasil (${sourceData.length} baris data)`);
+  logActivity('Ekspor Data Excel', `Mengunduh berkas ${fileName} sejumlah ${sourceData.length} baris.`);
 }
 
-// ── Navigation ───────────────────────────────────────────────────
+// ── Command Palette (Ctrl+K) ─────────────────────────────────────
+function openCommandPalette() {
+  const modal = $('commandPaletteModal');
+  const input = $('cpInput');
+  if (!modal || !input) return;
+
+  modal.classList.add('show');
+  input.value = '';
+  cpSelectedIndex = 0;
+  handleCPSearch();
+  input.focus();
+}
+
+function closeCommandPalette() {
+  const modal = $('commandPaletteModal');
+  if (modal) modal.classList.remove('show');
+}
+
+function handleCPSearch() {
+  const q = ($('cpInput')?.value || '').toLowerCase().trim();
+  const resultsEl = $('cpResults');
+  if (!resultsEl) return;
+
+  const items = [];
+
+  // Navigation Items
+  items.push({ type: 'nav', page: 'dashboard', label: 'Buka Halaman Dashboard', badge: 'Navigasi' });
+  items.push({ type: 'nav', page: 'pendaftar', label: 'Buka Basis Data Pendaftar', badge: 'Navigasi' });
+  items.push({ type: 'nav', page: 'reschedule', label: 'Buka Manajemen Reschedule', badge: 'Navigasi' });
+  items.push({ type: 'nav', page: 'rekap', label: 'Buka Rekap & Laporan BAP', badge: 'Navigasi' });
+
+  // System Actions
+  items.push({ type: 'action', action: 'theme', label: 'Ganti Mode Tampilan (Gelap / Terang)', badge: 'Tampilan' });
+  items.push({ type: 'action', action: 'refresh', label: 'Sinkronisasi Ulang Data Sekarang', badge: 'Sistem' });
+  items.push({ type: 'action', action: 'export', label: 'Unduh Seluruh Data ke Excel', badge: 'Ekspor' });
+  items.push({ type: 'action', action: 'audit', label: 'Buka Log Riwayat Aktivitas Petugas', badge: 'Audit' });
+
+  // Matching Applicants
+  if (q.length >= 2) {
+    allData.forEach(r => {
+      const match = 
+        (r.nama || '').toLowerCase().includes(q) ||
+        (r.reg || '').toLowerCase().includes(q) ||
+        (r.hp || '').includes(q) ||
+        (r.nik || '').includes(q);
+      if (match) {
+        items.push({
+          type: 'applicant',
+          key: r._key,
+          label: `${r.nama} (${r.reg})`,
+          sub: `${r.jenis_permohonan} - ${r.status}`,
+          badge: 'Pemohon'
+        });
+      }
+    });
+  }
+
+  // Filter items by query
+  const filtered = items.filter(item => {
+    if (!q) return item.type !== 'applicant';
+    return item.label.toLowerCase().includes(q) || (item.sub && item.sub.toLowerCase().includes(q));
+  });
+
+  cpCurrentResults = filtered.slice(0, 12);
+  if (cpSelectedIndex >= cpCurrentResults.length) cpSelectedIndex = 0;
+
+  if (!cpCurrentResults.length) {
+    resultsEl.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text-muted);font-size:12px">Tidak ada aksi atau data yang cocok.</div>';
+    return;
+  }
+
+  resultsEl.innerHTML = cpCurrentResults.map((item, idx) => `
+    <div class="cp-item-row ${idx === cpSelectedIndex ? 'selected' : ''}" onclick="executeCPItem(${idx})">
+      <div class="cp-item-left">
+        <span class="cp-item-badge">${item.badge}</span>
+        <div>
+          <div>${escHtml(item.label)}</div>
+          ${item.sub ? `<div style="font-size:10.5px;color:var(--text-muted);">${escHtml(item.sub)}</div>` : ''}
+        </div>
+      </div>
+      <kbd style="font-size:10px;color:var(--text-muted)">Pilih</kbd>
+    </div>
+  `).join('');
+}
+
+function handleCPKeydown(e) {
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    if (cpCurrentResults.length) {
+      cpSelectedIndex = (cpSelectedIndex + 1) % cpCurrentResults.length;
+      handleCPSearch();
+    }
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    if (cpCurrentResults.length) {
+      cpSelectedIndex = (cpSelectedIndex - 1 + cpCurrentResults.length) % cpCurrentResults.length;
+      handleCPSearch();
+    }
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    if (cpCurrentResults[cpSelectedIndex]) {
+      executeCPItem(cpSelectedIndex);
+    }
+  } else if (e.key === 'Escape') {
+    closeCommandPalette();
+  }
+}
+
+function executeCPItem(idx) {
+  const item = cpCurrentResults[idx];
+  if (!item) return;
+
+  closeCommandPalette();
+
+  if (item.type === 'nav') {
+    navTo(item.page, document.querySelector(`[data-page="${item.page}"]`));
+  } else if (item.type === 'action') {
+    if (item.action === 'theme') toggleTheme();
+    else if (item.action === 'refresh') loadData(true);
+    else if (item.action === 'export') exportExcel();
+    else if (item.action === 'audit') openAuditModal();
+  } else if (item.type === 'applicant') {
+    openModal(item.key);
+  }
+}
+
+// ── Shortcuts Modal Helper ───────────────────────────────────────
+function openShortcutsModal() {
+  $('shortcutsModal').classList.add('show');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeShortcutsModal() {
+  $('shortcutsModal').classList.remove('show');
+  document.body.style.overflow = '';
+}
+
+// ── Navigation Manager ───────────────────────────────────────────
 const PAGE_META = {
-  dashboard: ['Dashboard', 'Ringkasan & Data Terbaru'],
-  pendaftar: ['Data Pendaftar BAP', 'Seluruh pendaftar BAP Online'],
-  reschedule: ['Manajemen Reschedule', 'Pengajuan perubahan jadwal pemohon'],
-  rekap: ['Rekap & Laporan', 'Statistik pendaftaran BAP'],
+  dashboard: ['Dashboard', 'Pusat Kendali Pemeriksaan BAP'],
+  pendaftar: ['Data Pendaftar BAP', 'Basis Data Pendaftaran INTELDAKIM'],
+  reschedule: ['Manajemen Reschedule', 'Pengajuan Perubahan Jadwal Pemohon'],
+  rekap: ['Rekap & Laporan', 'Statistik Pelayanan Keimigrasian'],
 };
 
 function navTo(page, el) {
   $$('.nav-item').forEach(n => n.classList.remove('active'));
   if (el) el.classList.add('active');
   $$('.page-view').forEach(p => p.classList.remove('active'));
-  $('page-' + page).classList.add('active');
+
+  const targetPage = $('page-' + page);
+  if (targetPage) targetPage.classList.add('active');
 
   const [t, s] = PAGE_META[page] || [page, ''];
   $('topbarTitle').textContent = t;
-  $('topbarSub').textContent = s;
+  $('topbarBreadcrumb').textContent = t;
 
   closeSidebar();
 }
@@ -1380,57 +2139,102 @@ function toggleSidebar() {
   overlay.classList.toggle('show');
   if (btn) btn.setAttribute('aria-expanded', String(!isOpen));
 }
+
 function closeSidebar() {
-  $('sidebar').classList.remove('open');
-  $('sidebarOverlay').classList.remove('show');
+  $('sidebar')?.classList.remove('open');
+  $('sidebarOverlay')?.classList.remove('show');
   const btn = $('menuToggleBtn');
   if (btn) btn.setAttribute('aria-expanded', 'false');
 }
 
-// ── Toast ────────────────────────────────────────────────────────
+function toggleSidebarCollapse() {
+  // Mini collapsed mode if requested
+  const sidebar = $('sidebar');
+  if (sidebar) sidebar.classList.toggle('collapsed');
+}
+
+// ── Toast Notifications ──────────────────────────────────────────
 let toastTimer;
 function showToast(type, msg) {
   clearTimeout(toastTimer);
   const t = $('toast');
+  if (!t) return;
   t.textContent = msg;
   t.className = type;
   t.classList.add('show');
   toastTimer = setTimeout(() => t.classList.remove('show'), 3500);
 }
 
-// ── Event Listeners ──────────────────────────────────────────────
-$('modalOverlay').addEventListener('click', e => {
-  if (e.target === $('modalOverlay')) closeModal();
-});
-$('deleteOverlay').addEventListener('click', e => {
-  if (e.target === $('deleteOverlay')) closeDeleteModal();
-});
+// ── Global Keyboard Shortcuts ────────────────────────────────────
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') { closeModal(); closeLightbox(); closeDeleteModal(); resolveConfirm(false); }
-  // Ctrl+F → focus search
-  if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+  // Command palette (Ctrl+K or Cmd+K)
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+    e.preventDefault();
+    openCommandPalette();
+    return;
+  }
+
+  // Ctrl+F -> Focus Search
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') {
     const searchEl = $('searchInput');
-    if (searchEl && document.querySelector('#page-pendaftar.active')) {
+    if (searchEl) {
       e.preventDefault();
+      navTo('pendaftar', document.querySelector('[data-page=pendaftar]'));
       searchEl.focus();
       searchEl.select();
+      return;
+    }
+  }
+
+  // Escape key -> Close any modal
+  if (e.key === 'Escape') {
+    closeModal();
+    closeLightbox();
+    closeDeleteModal();
+    closeCommandPalette();
+    closeAuditModal();
+    closeShortcutsModal();
+    resolveConfirm(false);
+    return;
+  }
+
+  // Shortcuts when not in input
+  const isInput = ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName);
+  if (!isInput) {
+    if (e.key === '?') {
+      openShortcutsModal();
+    } else if (e.key === 'r' || e.key === 'R') {
+      loadData(true);
+    } else if (e.key === '1') {
+      navTo('dashboard', document.querySelector('[data-page=dashboard]'));
+    } else if (e.key === '2') {
+      navTo('pendaftar', document.querySelector('[data-page=pendaftar]'));
+    } else if (e.key === '3') {
+      navTo('reschedule', document.querySelector('[data-page=reschedule]'));
+    } else if (e.key === '4') {
+      navTo('rekap', document.querySelector('[data-page=rekap]'));
     }
   }
 });
 
-// ── Init ─────────────────────────────────────────────────────────
+// ── Initialization Sequence ──────────────────────────────────────
 window.addEventListener('DOMContentLoaded', () => {
   initTheme();
+  initSound();
   initOnlineStatus();
-  spawnParticles();
 
   const session = getSession();
   setTimeout(() => {
     const splash = $('splashScreen');
-    splash.classList.add('hide');
-    setTimeout(() => splash.style.display = 'none', 450);
+    if (splash) {
+      splash.classList.add('hide');
+      setTimeout(() => splash.style.display = 'none', 450);
+    }
 
-    if (session) bootDashboard(session.displayName);
-    else $('loginPage').classList.add('visible');
-  }, 1300);
+    if (session) {
+      bootDashboard(session.displayName);
+    } else {
+      $('loginPage').classList.add('visible');
+    }
+  }, 1000);
 });
